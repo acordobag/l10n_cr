@@ -323,7 +323,7 @@ class PosOrder(models.Model):
                                 doc.id,
                                 raise_exception=False,
                                 force_send=True)
-                            email_template.attachment_ids = [(5, 0, 0)]
+                            email_template.attachment_idsemail_template.attachment_ids = [(5, 0, 0)]
                             doc.state_email = 'sent'
                         except:
                             _logger.info('E-INV CR - Factura no enviada. ')
