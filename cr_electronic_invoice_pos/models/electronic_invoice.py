@@ -321,7 +321,7 @@ class PosOrder(models.Model):
                                 doc.id,
                                 raise_exception=False,
                                 force_send=True)
-                        email_template.attachment_ids = [(5, 0, 0)]
+                        # email_template.attachment_ids = [(5, 0, 0)]
                         doc.state_email = 'sent'
                     else:
                         doc.state_email = 'no_email'
