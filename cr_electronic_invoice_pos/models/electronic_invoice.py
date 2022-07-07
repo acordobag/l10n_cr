@@ -297,31 +297,50 @@ class PosOrder(models.Model):
                     doc.xml_respuesta_tributacion = response_json.get('respuesta-xml')
                     if doc.partner_id and doc.partner_id.email:
                         email_template = self.env.ref('cr_electronic_invoice_pos.email_template_pos_invoice', False)
+
                         attachment = self.env['ir.attachment'].search([
                             ('res_model', '=', 'pos.order'),
                             ('res_id', '=', doc.id),
                             ('res_field', '=', 'xml_comprobante')
                             ], limit=1)
-                        attachment.name = 'fact.xml'
-                        # attachment.datas_fname = doc.fname_xml_comprobante
-                        attachment.mimetype = 'text/xml'
+
                         attachment_resp = self.env['ir.attachment'].search([
                             ('res_model', '=', 'pos.order'),
                             ('res_id', '=', doc.id),
                             ('res_field', '=', 'xml_respuesta_tributacion')
                             ], limit=1)
-                        attachment_resp.name = 'resp.xml'
-                        # attachment_resp.datas_fname = doc.fname_xml_respuesta_tributacion
-                        attachment_resp.mimetype = 'text/xml'
+
+                        xml_att = self.env['ir.attachment'].create({
+                                                            'name': doc.fname_xml_comprobante,
+                                                            'type': 'binary',
+                                                            'datas': attachment.datas,
+                                                            'res_model': 'mail.template',
+                                                            'mimetype': 'text/xml'})
+
+                        xml_res = self.env['ir.attachment'].create({
+                                                            'name': doc.fname_xml_respuesta_tributacion,
+                                                            'type': 'binary',
+                                                            'datas': attachment_resp.datas,
+                                                            'res_model': 'mail.template',
+                                                            'mimetype': 'text/xml'})
+
+                        # # Invoice XML
+                        # attachment.name = ''
+                        # attachment.mimetype = 'text/xml'
+                        # # Response
+                        # attachment_resp.name = 'resp.xml'
+                        # attachment_resp.mimetype = 'text/xml'
+
+
                         email_template.attachment_ids = [
-                            (6, 0, [attachment.id, attachment_resp.id])]
+                            (6, 0, [xml_att.id, xml_res.id])]
                         email_template.with_context(
                             type='binary',
                             default_type='binary').send_mail(
                                 doc.id,
                                 raise_exception=False,
                                 force_send=True)
-                        # email_template.attachment_ids = [(5, 0, 0)]
+                        email_template.attachment_ids = [(5, 0, 0)]
                         doc.state_email = 'sent'
                     else:
                         doc.state_email = 'no_email'
