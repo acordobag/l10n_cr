@@ -300,23 +300,27 @@ class PosOrder(models.Model):
                     if doc.partner_id and doc.partner_id.email:
                         email_template = self.env.ref('cr_electronic_invoice_pos.email_template_pos_invoice', False)
                         # Extrae los Xml del modelo
-                        attachment = self.env['ir.attachment'].browse([
+                        attachment = self.env['ir.attachment'].search([
                             ('res_model', '=', 'pos.order'),
                             ('res_id', '=', doc.id),
                             ('res_field', '=', 'xml_comprobante')
                         ], limit=1)
-
-                        attachment_resp = self.env['ir.attachment'].browse([
+                        attachment_resp = self.env['ir.attachment'].search([
                             ('res_model', '=', 'pos.order'),
                             ('res_id', '=', doc.id),
                             ('res_field', '=', 'xml_respuesta_tributacion')
                         ], limit=1)
 
-                        attachment.name = doc.fname_xml_comprobante
+                        # Clona el XML RESP
+                        attachment_resp = copy.copy(attachment_resp)
+                        # Clona el XML
+                        attachment = copy.copy(attachment)
+
+                        attachment.name = copy.copy(doc.fname_xml_comprobante)
                         attachment.mimetype = 'text/xml'
 
                         # Clona el file name
-                        attachment_resp.name = doc.fname_xml_respuesta_tributacion
+                        attachment_resp.name = copy.copy(doc.fname_xml_respuesta_tributacion)
                         attachment_resp.mimetype = 'text/xml'
 
                         email_template.attachment_ids = [(6, 0, [attachment.id, attachment_resp.id])]
