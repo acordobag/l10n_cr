@@ -28,7 +28,7 @@ class PartnerElectronic(models.Model):
     activity_id = fields.Many2one("economic.activity",
                                   string="Default Economic Activity",
                                   context={'active_test': False})
-    economic_activities_ids = fields.Many2many('economic.activity',
+        economic_activities_ids = fields.Many2many('economic.activity',
                                                string='Economic Activities',
                                                context={'active_test': False})
     export = fields.Boolean(string="It's export", default=False)

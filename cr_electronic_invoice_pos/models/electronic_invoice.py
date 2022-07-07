@@ -7,6 +7,7 @@ from xml.sax.saxutils import escape
 import datetime
 import pytz
 from threading import Lock
+
 lock = Lock()
 
 _logger = logging.getLogger(__name__)
@@ -93,14 +94,14 @@ class PosOrder(models.Model):
             ('res_model', '=', 'pos.order'),
             ('res_id', '=', self.id),
             ('res_field', '=', 'xml_comprobante')
-            ], limit=1)
+        ], limit=1)
         attachment.name = self.fname_xml_comprobante
         # attachment.datas_fname = self.fname_xml_comprobante
         attachment_resp = self.env['ir.attachment'].search([
             ('res_model', '=', 'pos.order'),
             ('res_id', '=', self.id),
             ('res_field', '=', 'xml_respuesta_tributacion')
-            ], limit=1)
+        ], limit=1)
         attachment_resp.name = self.fname_xml_respuesta_tributacion
         # attachment_resp.datas_fname = self.fname_xml_respuesta_tributacion
         email_template.attachment_ids = [
@@ -142,7 +143,7 @@ class PosOrder(models.Model):
         ('firma_invalida', 'Invalid Sign'),
         ('error', 'Error'),
         ('procesando', 'Procesing')
-        ], 'FE State', copy=False)
+    ], 'FE State', copy=False)
 
     reference_code_id = fields.Many2one(
         "reference.code", string="Reference code")
@@ -166,7 +167,7 @@ class PosOrder(models.Model):
             ('FE', 'Electronic Invoice'),
             ('TE', 'Electronic Ticket'),
             ('NC', 'Electronic Credit Note')
-            ],
+        ],
         string="Receipt Type",
         default='FE',
         help='Show document type in concordance with Ministerio de Hacienda classification')
@@ -217,7 +218,7 @@ class PosOrder(models.Model):
             ('state', '!=', 'closed'),
             ('user_id', '=', self.env.uid),
             ('name', 'not like', 'RESCUE')
-            ], limit=1)
+        ], limit=1)
         if not current_session:
             raise UserError(
                 _('To return product(s), you need to open a session that will be used to register the refund.'))
@@ -264,7 +265,7 @@ class PosOrder(models.Model):
             ('state', 'in', ('paid', 'done', 'invoiced')),
             ('number_electronic', '!=', False),
             ('state_tributacion', 'in', ('recibido', 'procesando'))
-            ], limit=max_orders)
+        ], limit=max_orders)
         total_orders = len(pos_orders)
         current_order = 0
         _logger.info(
@@ -296,33 +297,36 @@ class PosOrder(models.Model):
                     doc.fname_xml_respuesta_tributacion = 'AHC_' + doc.number_electronic + '.xml'
                     doc.xml_respuesta_tributacion = response_json.get('respuesta-xml')
                     if doc.partner_id and doc.partner_id.email:
-                        email_template = self.env.ref('cr_electronic_invoice_pos.email_template_pos_invoice', False)
-                        attachment = self.env['ir.attachment'].search([
-                            ('res_model', '=', 'pos.order'),
-                            ('res_id', '=', doc.id),
-                            ('res_field', '=', 'xml_comprobante')
+                        try:
+                            email_template = self.env.ref('cr_electronic_invoice_pos.email_template_pos_invoice', False)
+                            attachment = self.env['ir.attachment'].search([
+                                ('res_model', '=', 'pos.order'),
+                                ('res_id', '=', doc.id),
+                                ('res_field', '=', 'xml_comprobante')
                             ], limit=1)
-                        attachment.name = doc.fname_xml_comprobante
-                        # attachment.datas_fname = doc.fname_xml_comprobante
-                        attachment.mimetype = 'text/xml'
-                        attachment_resp = self.env['ir.attachment'].search([
-                            ('res_model', '=', 'pos.order'),
-                            ('res_id', '=', doc.id),
-                            ('res_field', '=', 'xml_respuesta_tributacion')
+                            attachment.name = doc.fname_xml_comprobante
+                            # attachment.datas_fname = doc.fname_xml_comprobante
+                            attachment.mimetype = 'text/xml'
+                            attachment_resp = self.env['ir.attachment'].search([
+                                ('res_model', '=', 'pos.order'),
+                                ('res_id', '=', doc.id),
+                                ('res_field', '=', 'xml_respuesta_tributacion')
                             ], limit=1)
-                        attachment_resp.name = doc.fname_xml_respuesta_tributacion
-                        # attachment_resp.datas_fname = doc.fname_xml_respuesta_tributacion
-                        attachment_resp.mimetype = 'text/xml'
-                        email_template.attachment_ids = [
-                            (6, 0, [attachment.id, attachment_resp.id])]
-                        email_template.with_context(
-                            type='binary',
-                            default_type='binary').send_mail(
+                            attachment_resp.name = doc.fname_xml_respuesta_tributacion
+                            # attachment_resp.datas_fname = doc.fname_xml_respuesta_tributacion
+                            attachment_resp.mimetype = 'text/xml'
+                            email_template.attachment_ids = [
+                                (6, 0, [attachment.id, attachment_resp.id])]
+                            email_template.with_context(
+                                type='binary',
+                                default_type='binary').send_mail(
                                 doc.id,
                                 raise_exception=False,
                                 force_send=True)
-                        email_template.attachment_ids = [(5, 0, 0)]
-                        doc.state_email = 'sent'
+                            email_template.attachment_ids = [(5, 0, 0)]
+                            doc.state_email = 'sent'
+                        except:
+                            _logger.info('E-INV CR - Factura no enviada. ')
                     else:
                         doc.state_email = 'no_email'
                         _logger.info('E-INV CR - Email no enviado - cliente no definido')
@@ -370,7 +374,7 @@ class PosOrder(models.Model):
             ('number_electronic', '!=', False),
             ('state_email', '=', False),
             ('state_tributacion', '=', 'aceptado')
-            ], limit=max_orders)
+        ], limit=max_orders)
         total_orders = len(pos_orders)
         current_order = 0
         _logger.info(
@@ -383,20 +387,20 @@ class PosOrder(models.Model):
                     ('res_model', '=', 'pos.order'),
                     ('res_id', '=', doc.id),
                     ('res_field', '=', 'xml_comprobante')
-                    ], limit=1)
+                ], limit=1)
                 if not comprobante:
                     _logger.error('E-INV CR - Email no enviado - tiquete sin xml')
                     continue
                 try:
                     comprobante.name = doc.fname_xml_comprobante
                 except Exception:
-                    comprobante.name = 'FE_'+doc.number_electronic+'.xml'
+                    comprobante.name = 'FE_' + doc.number_electronic + '.xml'
                 # comprobante.datas_fname = comprobante.name
                 respuesta = self.env['ir.attachment'].search([
                     ('res_model', '=', 'pos.order'),
                     ('res_id', '=', doc.id),
                     ('res_field', '=', 'xml_respuesta_tributacion')
-                    ], limit=1)
+                ], limit=1)
                 respuesta.name = doc.fname_xml_respuesta_tributacion
                 # respuesta.datas_fname = doc.fname_xml_respuesta_tributacion
                 email_template = self.env.ref(
@@ -406,9 +410,9 @@ class PosOrder(models.Model):
                 email_template.with_context(
                     type='binary',
                     default_type='binary').send_mail(
-                        doc.id,
-                        raise_exception=False,
-                        force_send=True)
+                    doc.id,
+                    raise_exception=False,
+                    force_send=True)
                 doc.state_email = 'sent'
             elif doc.state_tributacion in ('rechazado', 'rejected'):
                 doc.state_email = 'fe_error'
@@ -444,7 +448,7 @@ class PosOrder(models.Model):
             dia = doc_name[3:5]  # '%02d' % now_cr.day,
             mes = doc_name[5:7]  # '%02d' % now_cr.month,
             anno = doc_name[7:9]  # str(now_cr.year)[2:4],
-            date_cr = now_cr.strftime("20"+anno+"-"+mes+"-"+dia+"T%H:%M:%S-06:00")
+            date_cr = now_cr.strftime("20" + anno + "-" + mes + "-" + dia + "T%H:%M:%S-06:00")
             doc.name = doc.number_electronic[21:41]
             if not doc.xml_comprobante:
                 numero_documento_referencia = False
