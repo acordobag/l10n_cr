@@ -299,24 +299,32 @@ class PosOrder(models.Model):
                     doc.xml_respuesta_tributacion = response_json.get('respuesta-xml')
                     if doc.partner_id and doc.partner_id.email:
                         email_template = self.env.ref('cr_electronic_invoice_pos.email_template_pos_invoice', False)
-                        attachment = copy.copy(self.env['ir.attachment'].search([
+                        # Extrae los Xml del modelo
+                        attachment = self.env['ir.attachment'].search([
                             ('res_model', '=', 'pos.order'),
                             ('res_id', '=', doc.id),
                             ('res_field', '=', 'xml_comprobante')
-                        ], limit=1))
-                        attachment.name = doc.fname_xml_comprobante
-                        # attachment.datas_fname = doc.fname_xml_comprobante
-                        attachment.mimetype = 'text/xml'
-                        attachment_resp = copy.copy(self.env['ir.attachment'].search([
+                        ], limit=1)
+                        attachment_resp = self.env['ir.attachment'].search([
                             ('res_model', '=', 'pos.order'),
                             ('res_id', '=', doc.id),
                             ('res_field', '=', 'xml_respuesta_tributacion')
-                        ], limit=1))
+                        ], limit=1)
+
+                        # Clona el XML RESP
+                        attachment_resp = copy.copy(attachment_resp)
+                        # Clona el XML
+                        attachment = copy.copy(attachment)
+
+                        attachment.name = copy.copy(doc.fname_xml_comprobante)
+                        attachment.mimetype = 'text/xml'
+
+                        # Clona el file name
                         attachment_resp.name = copy.copy(doc.fname_xml_respuesta_tributacion)
-                        # attachment_resp.datas_fname = doc.fname_xml_respuesta_tributacion
                         attachment_resp.mimetype = 'text/xml'
-                        email_template.attachment_ids = [
-                            (6, 0, [attachment.id, attachment_resp.id])]
+
+                        email_template.attachment_ids = [(6, 0, [attachment.id, attachment_resp.id])]
+
                         email_template.with_context(
                             type='binary',
                             default_type='binary').send_mail(
