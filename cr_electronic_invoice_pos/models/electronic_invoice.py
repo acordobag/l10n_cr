@@ -305,17 +305,18 @@ class PosOrder(models.Model):
                             ('res_id', '=', doc.id),
                             ('res_field', '=', 'xml_comprobante')
                         ], limit=1)
+
                         attachment_resp = self.env['ir.attachment'].browse([
                             ('res_model', '=', 'pos.order'),
                             ('res_id', '=', doc.id),
                             ('res_field', '=', 'xml_respuesta_tributacion')
                         ], limit=1)
 
-                        attachment.name = copy.copy(doc.fname_xml_comprobante)
+                        attachment.name = doc.fname_xml_comprobante
                         attachment.mimetype = 'text/xml'
 
                         # Clona el file name
-                        attachment_resp.name = copy.copy(doc.fname_xml_respuesta_tributacion)
+                        attachment_resp.name = doc.fname_xml_respuesta_tributacion
                         attachment_resp.mimetype = 'text/xml'
 
                         email_template.attachment_ids = [(6, 0, [attachment.id, attachment_resp.id])]
