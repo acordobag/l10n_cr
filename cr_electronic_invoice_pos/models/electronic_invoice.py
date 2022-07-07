@@ -311,11 +311,6 @@ class PosOrder(models.Model):
                             ('res_field', '=', 'xml_respuesta_tributacion')
                         ], limit=1)
 
-                        # Clona el XML RESP
-                        attachment_resp = copy.copy(attachment_resp)
-                        # Clona el XML
-                        attachment = copy.copy(attachment)
-
                         attachment.name = copy.copy(doc.fname_xml_comprobante)
                         attachment.mimetype = 'text/xml'
 
