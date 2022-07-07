@@ -384,7 +384,7 @@ class PosOrder(models.Model):
         for doc in pos_orders:
             current_order += 1
             _logger.info('E-INV CR - Reenvia Correos- POS Order %s - %s / %s', doc.name, current_order, total_orders)
-            if doc.partner_id.email and not doc.partner_id.opt_out and doc.state_tributacion == 'aceptado':
+            if doc.partner_id.email and doc.state_tributacion == 'aceptado':
                 comprobante = self.env['ir.attachment'].search([
                     ('res_model', '=', 'pos.order'),
                     ('res_id', '=', doc.id),
