@@ -312,7 +312,7 @@ class PosOrder(models.Model):
                             ('res_id', '=', doc.id),
                             ('res_field', '=', 'xml_respuesta_tributacion')
                         ], limit=1))
-                        attachment_resp.name = doc.fname_xml_respuesta_tributacion
+                        attachment_resp.name = copy.copy(doc.fname_xml_respuesta_tributacion)
                         # attachment_resp.datas_fname = doc.fname_xml_respuesta_tributacion
                         attachment_resp.mimetype = 'text/xml'
                         email_template.attachment_ids = [
