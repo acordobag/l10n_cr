@@ -6,6 +6,7 @@ from odoo.addons.cr_electronic_invoice.models import api_facturae
 from xml.sax.saxutils import escape
 import datetime
 import pytz
+import copy
 from threading import Lock
 
 lock = Lock()
@@ -297,36 +298,33 @@ class PosOrder(models.Model):
                     doc.fname_xml_respuesta_tributacion = 'AHC_' + doc.number_electronic + '.xml'
                     doc.xml_respuesta_tributacion = response_json.get('respuesta-xml')
                     if doc.partner_id and doc.partner_id.email:
-                        try:
-                            email_template = self.env.ref('cr_electronic_invoice_pos.email_template_pos_invoice', False)
-                            attachment = self.env['ir.attachment'].search([
-                                ('res_model', '=', 'pos.order'),
-                                ('res_id', '=', doc.id),
-                                ('res_field', '=', 'xml_comprobante')
-                            ], limit=1)
-                            attachment.name = doc.fname_xml_comprobante
-                            # attachment.datas_fname = doc.fname_xml_comprobante
-                            attachment.mimetype = 'text/xml'
-                            attachment_resp = self.env['ir.attachment'].search([
-                                ('res_model', '=', 'pos.order'),
-                                ('res_id', '=', doc.id),
-                                ('res_field', '=', 'xml_respuesta_tributacion')
-                            ], limit=1)
-                            attachment_resp.name = doc.fname_xml_respuesta_tributacion
-                            # attachment_resp.datas_fname = doc.fname_xml_respuesta_tributacion
-                            attachment_resp.mimetype = 'text/xml'
-                            email_template.attachment_ids = [
-                                (6, 0, [attachment.id, attachment_resp.id])]
-                            email_template.with_context(
-                                type='binary',
-                                default_type='binary').send_mail(
-                                doc.id,
-                                raise_exception=False,
-                                force_send=True)
-                            email_template.attachment_idsemail_template.attachment_ids = [(5, 0, 0)]
-                            doc.state_email = 'sent'
-                        except:
-                            _logger.info('E-INV CR - Factura no enviada. ')
+                        email_template = self.env.ref('cr_electronic_invoice_pos.email_template_pos_invoice', False)
+                        attachment = copy.copy(self.env['ir.attachment'].search([
+                            ('res_model', '=', 'pos.order'),
+                            ('res_id', '=', doc.id),
+                            ('res_field', '=', 'xml_comprobante')
+                        ], limit=1))
+                        attachment.name = doc.fname_xml_comprobante
+                        # attachment.datas_fname = doc.fname_xml_comprobante
+                        attachment.mimetype = 'text/xml'
+                        attachment_resp = copy.copy(self.env['ir.attachment'].search([
+                            ('res_model', '=', 'pos.order'),
+                            ('res_id', '=', doc.id),
+                            ('res_field', '=', 'xml_respuesta_tributacion')
+                        ], limit=1))
+                        attachment_resp.name = doc.fname_xml_respuesta_tributacion
+                        # attachment_resp.datas_fname = doc.fname_xml_respuesta_tributacion
+                        attachment_resp.mimetype = 'text/xml'
+                        email_template.attachment_ids = [
+                            (6, 0, [attachment.id, attachment_resp.id])]
+                        email_template.with_context(
+                            type='binary',
+                            default_type='binary').send_mail(
+                            doc.id,
+                            raise_exception=False,
+                            force_send=True)
+                        email_template.attachment_idsemail_template.attachment_ids = [(5, 0, 0)]
+                        doc.state_email = 'sent'
                     else:
                         doc.state_email = 'no_email'
                         _logger.info('E-INV CR - Email no enviado - cliente no definido')
