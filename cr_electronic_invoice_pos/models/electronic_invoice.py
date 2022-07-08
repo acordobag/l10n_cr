@@ -244,7 +244,7 @@ class PosOrder(models.Model):
                 tipo_documento = 'TE'
                 referenced_order = order.pos_order_id and order.pos_order_id.id or order.id
 
-            clone = order.copy({
+            refund_order = order.copy({
                 'name': order.name + (tipo_documento == 'NC' and _(' REFUND') or ''),
                 'session_id': current_session.id,
                 'date_order': fields.Datetime.now(),
@@ -257,8 +257,12 @@ class PosOrder(models.Model):
                 'amount_total': -order.amount_total,
                 'amount_paid': 0,
             })
-
-            pos_order += clone
+            for line in order.lines:
+                PosOrderLineLot = self.env['pos.pack.operation.lot']
+                for pack_lot in line.pack_lot_ids:
+                    PosOrderLineLot += pack_lot.copy()
+                line.copy(line._prepare_refund_data(refund_order, PosOrderLineLot))
+            pos_order += refund_order
         return {
             'name': _('Return Products'),
             'view_type': 'form',
