@@ -2,16 +2,16 @@
 <templates id="template" xml:space="preserve">
     <t t-name="OrderReceipt" t-inherit="point_of_sale.OrderReceipt" t-inherit-mode="extension" owl="1">
         <xpath expr="//div[hasclass('orderlines')]" position="before">
-            <t t-if="receipt.widget.pos.get_client().vat">
+            <t t-if="receipt.client.vat">
                 <div class="pos-receipt-center-align">
                     Cédula: <br/>
-                    <t t-esc="receipt.widget.pos.get_client().vat"/>
+                    <t t-esc="receipt.client.vat"/>
                 </div>
             </t>
-            <t t-if="receipt.widget.pos.get_client().name">
+            <t t-if="receipt.client.name">
                 <div class="pos-receipt-center-align">
                     Cliente: <br/>
-                    <t t-esc="receipt.widget.pos.get_client().name"/>
+                    <t t-esc="receipt.client.name"/>
                 </div>
              </t>
             <t t-if="receipt.number_electronic">
