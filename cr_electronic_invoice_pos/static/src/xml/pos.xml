@@ -4,6 +4,14 @@
         <xpath expr="//div[hasclass('orderlines')]" position="before">
             <t t-if="receipt.number_electronic">
                 <div class="pos-receipt-center-align">
+                    Cédula: <br/>
+                    <t t-esc="receipt.partner_id.vat"/>
+                </div>
+                <div class="pos-receipt-center-align">
+                    Cliente: <br/>
+                    <t t-esc="receipt.partner_id.name"/>
+                </div>
+                <div class="pos-receipt-center-align">
                     Clave: <br/>
                     <t t-esc="receipt.number_electronic.substring(0,25)"/><br/>
                     <t t-esc="receipt.number_electronic.substring(25,50)"/>

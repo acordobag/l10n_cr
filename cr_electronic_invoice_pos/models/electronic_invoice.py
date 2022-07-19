@@ -409,6 +409,10 @@ class PosOrder(models.Model):
             date_cr = now_cr.strftime("20"+anno+"-"+mes+"-"+dia+"T%H:%M:%S-06:00")
             doc.name = doc.number_electronic[21:41]
             if not doc.xml_comprobante or (doc.xml_comprobante and not doc.state_tributacion):
+                if doc.xml_comprobante:
+                    doc.xml_comprobante = False
+                    doc.xml_respuesta_tributacion = False
+
                 numero_documento_referencia = False
                 fecha_emision_referencia = False
                 codigo_referencia = False
