@@ -153,7 +153,8 @@ class PosOrder(models.Model):
         ('recibido', 'Received'),
         ('firma_invalida', 'Invalid Sign'),
         ('error', 'Error'),
-        ('procesando', 'Procesing')
+        ('procesando', 'Procesing'),
+        ('rejectedfixed', 'Ajuste Rechazo')
         ], 'FE State', copy=False)
 
     reference_code_id = fields.Many2one(
@@ -395,6 +396,10 @@ class PosOrder(models.Model):
             current_order += 1
             _logger.info('E-INV CR - Valida Hacienda - POS Order: "%s"  -  %s / %s',
                          doc.number_electronic, current_order, total_orders)
+
+            if doc.state_tributacion == 'rejectedfixed':
+                doc.number_electronic = doc.session_id.config_id.TE_sequence_id.next_by_id()
+
             doc_name = doc.number_electronic
             if not doc_name or not doc_name.isdigit() or doc.company_id.frm_ws_ambiente == 'disabled':
                 _logger.error(
