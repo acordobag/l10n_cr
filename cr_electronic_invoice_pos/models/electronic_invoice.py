@@ -398,6 +398,11 @@ class PosOrder(models.Model):
                          doc.number_electronic, current_order, total_orders)
 
             if doc.state_tributacion == 'rejectedfixed':
+                new_electronic_number = doc.session_id.config_id.TE_sequence_id.next_by_id()
+                doc.message_post(
+                    subject=_('Error'), body=_('El número elecy=trónico pasó de %s a %s por motivo de rechazo.',doc.number_electronic,new_electronic_number ))
+                doc.number_electronic = new_electronic_number
+            elif doc.number_electronic:
                 doc.number_electronic = doc.session_id.config_id.TE_sequence_id.next_by_id()
 
             doc_name = doc.number_electronic
