@@ -402,7 +402,11 @@ class PosOrder(models.Model):
                          doc.number_electronic, current_order, total_orders)
 
             if doc.state_tributacion == 'rejectedfixed':
-                new_electronic_number = doc.session_id.config_id.TE_sequence_id.next_by_id()
+                new_electronic_number = False
+                if doc.tipo_documento == 'FE':
+                    new_electronic_number = doc.session_id.config_id.FE_sequence_id.next_by_id()
+                elif doc.tipo_documento == 'TE':
+                    new_electronic_number = doc.session_id.config_id.TE_sequence_id.next_by_id()
                 doc.message_post(
                     subject=_('Error'), body=_('El número electrónico cambió de %s a %s por motivo de rechazo.',doc.number_electronic,new_electronic_number ))
                 doc.number_electronic = new_electronic_number
