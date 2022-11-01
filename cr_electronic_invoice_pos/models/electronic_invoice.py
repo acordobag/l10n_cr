@@ -390,7 +390,7 @@ class PosOrder(models.Model):
                                                    '|', (no_partner, '=', True),
                                                    '&', ('partner_id', '!=', False), ('partner_id.vat', '!=', False),
                                                    ('tipo_documento', 'in', ('TE', 'FE', 'NC')),
-                                                   ('state_tributacion', '=', False)
+                                                   ('state_tributacion', 'in', (False,'rejectedfixed'))
                                                    ], order="date_order", limit=max_orders)
         total_orders = len(pos_orders)
         current_order = 0
@@ -406,6 +406,7 @@ class PosOrder(models.Model):
                 doc.message_post(
                     subject=_('Error'), body=_('El número electrónico cambió de %s a %s por motivo de rechazo.',doc.number_electronic,new_electronic_number ))
                 doc.number_electronic = new_electronic_number
+                doc.state_tributacion = False
 
             doc_name = doc.number_electronic
             if not doc_name or not doc_name.isdigit() or doc.company_id.frm_ws_ambiente == 'disabled':
