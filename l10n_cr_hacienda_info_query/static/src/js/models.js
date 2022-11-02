@@ -12,7 +12,7 @@ function(require) {
     var round_pr = utils.round_precision;
     var _super_orderline = models.Orderline.prototype;
     
-    models.load_fields('res.partner', 'identification_id', 'code');
+    models.load_fields('res.partner', 'identification_id');
 
     models.load_fields('res.partner', 'county_id', 'district_id');
     

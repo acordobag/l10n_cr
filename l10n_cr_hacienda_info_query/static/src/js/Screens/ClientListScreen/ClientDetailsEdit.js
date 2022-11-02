@@ -49,7 +49,7 @@ odoo.define('l10n_cr_hacienda_info_query.ClientDetailsEdit',
                 var str_html = "";
                 for (var i = 0; i < district.length; i++) {
                     if (district[i].county_id[0] == canton.options[canton.selectedIndex].value) {
-                        str_html += "<option value='" + district[i]['id'] + "'>" + district[i]['name'] + "</option>";
+                        str_html += "<option value='" + district[i]['id'] + "' selected=''" + this.props.partner.district_id ? (district[i]['id'] === props.partner.district_id[0] ? true : false) : false + ">" + district[i]['name'] + "</option>";
                     }
                 }
                 var select = document.getElementsByName("district_id")[0];
@@ -131,7 +131,7 @@ odoo.define('l10n_cr_hacienda_info_query.ClientDetailsEdit',
             obtener_nombre(event) {
                 var vat = event.target.value
                 var host = window.location.origin
-                var end_point =  host + "/cedula/" + vat
+                var end_point = host + "/cedula/" + vat
                 var result = httpGet(end_point);
                 this.changes[event.target.name] = event.target.value;
                 this.changes['name'] = result['nombre'];
