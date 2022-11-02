@@ -98,6 +98,15 @@ msgstr "Identificación"
 #. module: l10n_cr_hacienda_info_query
 #. openerp-web
 #: code:addons/l10n_cr_hacienda_info_query/static/src/xml/Screens/ClientListScreen/ClientDetailsEdit.xml:0
+#: model:ir.model.fields,field_description:l10n_cr_hacienda_info_query.field_res_config_settings__id
+#: model:ir.model.fields,field_description:l10n_cr_hacienda_info_query.field_res_partner__id
+#, python-format
+msgid "ID Type"
+msgstr "Tipo de Identificación"
+
+#. module: l10n_cr_hacienda_info_query
+#. openerp-web
+#: code:addons/l10n_cr_hacienda_info_query/static/src/xml/Screens/ClientListScreen/ClientDetailsEdit.xml:0
 #, python-format
 msgid "Language"
 msgstr "Idioma"

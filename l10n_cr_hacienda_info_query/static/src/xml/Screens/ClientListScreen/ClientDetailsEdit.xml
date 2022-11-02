@@ -86,7 +86,12 @@
                         <span class="label">ID</span>
                         <input class="detail vat" name="vat"  t-on-change="obtener_nombre"
                                t-att-value="props.partner.vat || ''" />
-                        <input class="detail" id="identification_id" hidden="hidden" name="identification_id"  t-att-value="ninguno"/>
+                    </div>
+                    <div class="client-detail">
+                        <span class="label">ID Type</span>
+                        <select class="detail needsclick" name="identification_id"
+                        t-on-change="captureChange">
+                        </select>
                     </div>
                     <div t-if="env.pos.pricelists.length gt 1" class="client-detail">
                         <span class="label">Pricelist</span>

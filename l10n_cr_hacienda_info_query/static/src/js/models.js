@@ -12,10 +12,19 @@ function(require) {
     var round_pr = utils.round_precision;
     var _super_orderline = models.Orderline.prototype;
     
+    models.load_fields('res.partner', 'identification_id', 'code');
+
     models.load_fields('res.partner', 'county_id', 'district_id');
     
     models.load_fields('res.country.state', 'code');
     
+    models.load_models({
+        model: 'identification.type',
+        fields: ['name','code'],
+        loaded: function(self,identification_id){
+            self.identification_id = identification_id;
+    }})
+
     models.load_models([{
             model: 'res.country.county',
             fields: ['name','code','state_id'],
