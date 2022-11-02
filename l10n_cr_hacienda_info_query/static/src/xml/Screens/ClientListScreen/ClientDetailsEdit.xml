@@ -90,7 +90,7 @@
                         t-on-change="captureChange">
                         <t t-foreach="env.pos.identification_id" t-as="type"
                             t-key="type.id">
-                            <option t-att-value="type.code">
+                            <option t-att-value="type.id">
                                 <t t-esc="type.name" />
                             </option>
                         </t>
