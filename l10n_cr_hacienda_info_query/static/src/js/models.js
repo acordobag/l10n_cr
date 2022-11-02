@@ -18,6 +18,13 @@ function(require) {
     
     models.load_fields('res.country.state', 'code');
     
+    models.load_models({
+        model: 'identification.type',
+        fields: ['name','code'],
+        loaded: function(self,type){
+            self.type = type;
+    }})
+
     models.load_models([{
             model: 'res.country.county',
             fields: ['name','code','state_id'],
