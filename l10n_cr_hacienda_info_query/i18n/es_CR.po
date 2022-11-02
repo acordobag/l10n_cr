@@ -93,7 +93,7 @@ msgstr "Error encontrado al cargar la imagen. Inténtalo de nuevo."
 #: model:ir.model.fields,field_description:l10n_cr_hacienda_info_query.field_res_partner__id
 #, python-format
 msgid "ID"
-msgstr "Identificación"
+msgstr "Ced."
 
 #. module: l10n_cr_hacienda_info_query
 #. openerp-web
@@ -101,7 +101,7 @@ msgstr "Identificación"
 #: model:ir.model.fields,field_description:l10n_cr_hacienda_info_query.identification_id
 #, python-format
 msgid "ID Type"
-msgstr "Tipo de Identificación"
+msgstr "Tipo Ced."
 
 #. module: l10n_cr_hacienda_info_query
 #. openerp-web
