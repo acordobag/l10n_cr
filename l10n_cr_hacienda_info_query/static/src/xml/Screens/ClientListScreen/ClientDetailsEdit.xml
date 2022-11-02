@@ -39,9 +39,7 @@
                         t-on-change="onchange_country">
                         <option value="">None</option>
                         <t t-foreach="env.pos.countries" t-as="country" t-key="country.id">
-                            <option t-att-value="country.id"
-                            t-att-selected="props.partner.country_id ? (type.id === props.partner.country_id[0] ? true : false) : false">
-                            <t t-esc="type.name" />
+                            <option t-att-value="country.id">
                                 <t t-esc="country.name" />
                             </option>
                         </t>
@@ -93,7 +91,8 @@
                         <option value="">None</option>
                         <t t-foreach="env.pos.id_types" t-as="type" t-key="type.id">
                             <option t-att-value="type.id"
-                            t-att-selected="props.partner.identification_id ? (type.id === props.partner.identification_id[0] ? true : false) : false">                                <t t-esc="type.name" />
+                            t-att-selected="props.partner.identification_id ? (type.id === props.partner.identification_id[0] ? true : false) : false">                                
+                            <t t-esc="type.name" />
                             </option>
                         </t>
                     </select>
