@@ -13,6 +13,8 @@ class ActualizarPosApi(http.Controller):
         set_param = request.env['ir.config_parameter'].sudo().set_param
         get_param = request.env['ir.config_parameter'].sudo().get_param
 
+        all_emails_yo_contribuyo = ''
+        
         url_base = get_param('url_base')
         url_base_yo_contribuyo = get_param('url_base_yo_contribuyo')
         usuario_yo_contribuyo = get_param('usuario_yo_contribuyo')
@@ -29,8 +31,6 @@ class ActualizarPosApi(http.Controller):
             headers = {'access-user': usuario_yo_contribuyo, 'access-token': token_yo_contribuyo}
 
             peticion = requests.get(end_point, headers=headers, timeout=10)
-
-            all_emails_yo_contribuyo = ''
 
             if peticion.status_code in (200, 202) and len(peticion._content) > 0:
                 contenido = json.loads(str(peticion._content, 'utf-8'))
