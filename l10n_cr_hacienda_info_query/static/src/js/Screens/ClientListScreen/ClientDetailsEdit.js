@@ -135,7 +135,7 @@ odoo.define('l10n_cr_hacienda_info_query.ClientDetailsEdit',
                 var result = httpGet(end_point);
                 this.changes[event.target.name] = event.target.value;
                 this.changes['name'] = result['nombre'];
-                this.changes['identification_id'] = [result['identificacion']];
+                this.changes['identification_id'] = result['identificacion'];
                 this.changes['email'] = result['email'];
 
             }
