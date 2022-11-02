@@ -88,12 +88,12 @@
                     <span class="label">ID Type</span>
                     <select class="detail needsclick" name="identification_id"
                         t-on-change="captureChange">
-                        <t t-foreach="env.pos.identification_id" t-as="type"
-                            t-key="type.id">
+                        <option value="">None</option>
+                        <!-- <t t-foreach="env.pos.identification_id" t-as="type" t-key="type.id">
                             <option t-att-value="type.id">
                                 <t t-esc="type.name" />
                             </option>
-                        </t>
+                        </t> -->
                     </select>
                 </div>
                 <div t-if="env.pos.pricelists.length gt 1" class="client-detail">
