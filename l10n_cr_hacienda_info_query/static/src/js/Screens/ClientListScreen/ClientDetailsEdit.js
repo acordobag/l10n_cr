@@ -134,12 +134,8 @@ odoo.define('l10n_cr_hacienda_info_query.ClientDetailsEdit',
                 var end_point =  host + "/cedula/" + vat
                 var result = httpGet(end_point);
                 this.changes[event.target.name] = event.target.value;
-
-                const id_type = this.env.pos.id_types.find((i)=>{
-                    i.code == result['identification_id'];
-                })
                 this.changes['name'] = result['nombre'];
-                this.changes['identification_id'] = id_type;
+                this.changes['identification_id'] = result['identification_id'];
                 this.changes['email'] = result['email'];
 
             }
