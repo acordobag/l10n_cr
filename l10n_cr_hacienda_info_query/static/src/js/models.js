@@ -21,8 +21,8 @@ function(require) {
     models.load_models({
         model: 'identification.type',
         fields: ['name','code'],
-        loaded: function(self,type){
-            self.type = type;
+        loaded: function(self,id_types){
+            self.id_types = id_types;
     }})
 
     models.load_models([{
