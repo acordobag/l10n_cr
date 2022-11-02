@@ -136,7 +136,7 @@ odoo.define('l10n_cr_hacienda_info_query.ClientDetailsEdit',
                 this.changes[event.target.name] = event.target.value;
 
                 this.changes['name'] = result['nombre'];
-                this.changes['name'] = result['nombre'];
+                this.changes['identification_id'] = result['identification_id'];
                 this.changes['email'] = result['email'];
 
             }
