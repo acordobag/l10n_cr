@@ -14,10 +14,10 @@
                     <t t-esc="receipt.client.name"/>
                 </div>
              </t>
-             <t t-if="receipt.client and receipt.client.name">
+             <t t-if="receipt.date and receipt.client.localestring">
                 <div class="pos-receipt-center-align">
                     Fecha: <br/>
-                    <t t-esc="receipt.date_order"/>
+                    <t t-esc="receipt.localestring"/>
                 </div>
              </t>
             <t t-if="receipt.number_electronic">
