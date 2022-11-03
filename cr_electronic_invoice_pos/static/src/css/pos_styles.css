@@ -1,0 +1,13 @@
+.pos-receipt .pos-receipt-contact {
+    text-align: center;
+    font-size: 100%!important;
+}
+
+.pos-receipt .orderlines {
+    margin: 2rem 0!important;
+}
+
+.pos-receipt .pos-customer {
+    margin-bottom: 2rem!important;
+}
+

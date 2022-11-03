@@ -5,13 +5,3 @@
     color: rgb(239, 153, 65);
     box-shadow: 0px 0px 0px 3px rgb(239, 153, 65);
 }
-
-.pos-receipt .pos-receipt-contact {
-    text-align: center;
-    font-size: 100%!important;
-}
-
-.pos-receipt .orderlines {
-    margin: 2rem 0!important;
-}
-
