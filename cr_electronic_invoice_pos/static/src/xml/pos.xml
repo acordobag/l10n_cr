@@ -9,24 +9,24 @@
                 </div>
             </t>
             <t t-if="receipt.client and receipt.client.name">
-                <div class="pos-receipt-center-align pos-customer">
+                <div class="pos-receipt-center-align">
                     Cliente: <br/>
                     <t t-esc="receipt.client.name"/>
                 </div>
              </t>
-             <!-- <t t-if="receipt.date and receipt.date.localestring">
+             <t t-if="receipt.date and receipt.date.localestring pos-customer">
                 <div class="pos-receipt-center-align">
                     Fecha: <br/>
                     <t t-esc="receipt.date.localestring"/>
                 </div>
-             </t> -->
-            <t t-if="receipt.number_electronic pos-con-number">
+            </t>
+            <t t-if="receipt.number_electronic">
                 <div class="pos-receipt-center-align">
                     Clave: <br/>
                     <t t-esc="receipt.number_electronic.substring(0,25)"/><br/>
                     <t t-esc="receipt.number_electronic.substring(25,50)"/>
                 </div>
-                <div class="pos-receipt-center-align pos-con-number">
+                <div class="pos-receipt-center-align">
                     Consecutivo: <br/>
                     <t t-esc="receipt.number_electronic.substring(21,41)"/>
                 </div>
