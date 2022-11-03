@@ -14,10 +14,10 @@
                     <t t-esc="receipt.client.name"/>
                 </div>
              </t>
-             <t t-if="receipt.date and receipt.date.isostring">
+             <t t-if="receipt.date and receipt.date.localestring">
                 <div class="pos-receipt-center-align">
                     Fecha: <br/>
-                    <t t-esc="new Date(receipt.date.isostring).toLocaleString()"/>
+                    <t t-esc="receipt.date.localestring"/>
                 </div>
              </t>
             <t t-if="receipt.number_electronic">
