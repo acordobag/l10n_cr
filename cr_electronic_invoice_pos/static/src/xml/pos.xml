@@ -14,10 +14,10 @@
                     <t t-esc="receipt.client.name"/>
                 </div>
              </t>
-             <t t-if="receipt.date and receipt.date.localestring">
+             <t t-if="receipt.date and receipt.date.isostring">
                 <div class="pos-receipt-center-align">
                     Fecha: <br/>
-                    <t t-esc="receipt.date.localestring"/>
+                    <t t-esc="datetime.fromisoformat(receipt.date.isostring).strftime( &quot;%d-%m-%Y %H:%M:%S&quot;)"/>
                 </div>
              </t>
             <t t-if="receipt.number_electronic">
