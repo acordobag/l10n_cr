@@ -125,10 +125,12 @@ odoo.define('cr_electronic_invoice_pos.models', function (require) {
         },
         export_for_printing: function(){
             var result = _super.prototype.export_for_printing.call(this, arguments);
+            result.currentDate = new Date().toLocaleDateString()
             if (this.sequence && this.number_electronic && this.tipo_documento) {
                 result.sequence = this.sequence;
                 result.number_electronic = this.number_electronic;
                 result.tipo_documento = this.tipo_documento;
+                result.date
             }
 
             return result;
