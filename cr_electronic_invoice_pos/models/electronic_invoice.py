@@ -228,7 +228,6 @@ class PosOrder(models.Model):
             [('code', '=', '01')], limit=1)
         current_session = self.env['pos.session'].search([
             ('state', '!=', 'closed'),
-            ('user_id', '=', self.env.uid),
             ('name', 'not like', 'RESCUE')
             ], limit=1)
         if not current_session:
@@ -245,7 +244,7 @@ class PosOrder(models.Model):
                 tipo_documento = 'TE'
                 referenced_order = order.pos_order_id and order.pos_order_id.id or order.id
 
-            refund_order = order.copy({
+            clone = order.copy({
                 'name': order.name + (tipo_documento == 'NC' and _(' REFUND') or ''),
                 'session_id': current_session.id,
                 'date_order': fields.Datetime.now(),
