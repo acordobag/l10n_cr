@@ -189,8 +189,7 @@ def get_token_hacienda(inv, tipo_ambiente):
     if token and (current_time - token_time < token_expire - 10):
         token_hacienda = token
     else:
-        _logger.info(inv.company_id.frm_ws_identificador)
-        _logger.info(inv.company_id.frm_ws_password)
+        
         headers = {}
         data = {'client_id': tipo_ambiente,
                 'client_secret': '',
@@ -198,7 +197,7 @@ def get_token_hacienda(inv, tipo_ambiente):
                 'username': inv.company_id.frm_ws_identificador,
                 'password': inv.company_id.frm_ws_password}
 
-
+        _logger.info('test %s' % (data))
 
         # establecer el ambiente al cual me voy a conectar
         endpoint = fe_enums.UrlHaciendaToken[tipo_ambiente]
