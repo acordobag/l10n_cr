@@ -642,7 +642,7 @@ def gen_xml_v43(inv, sale_conditions, total_servicio_gravado,
         sb.append('<Razon>' + str(razon_referencia) + '</Razon>')
         sb.append('</InformacionReferencia>')
 
-    if invoice_comments or orden_compra:   
+    if invoice_comments or inv.ref:   
         sb.append('<Otros>')
 
         if invoice_comments:
