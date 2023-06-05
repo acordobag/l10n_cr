@@ -32,6 +32,7 @@ class PartnerElectronic(models.Model):
                                                string='Economic Activities',
                                                context={'active_test': False})
     export = fields.Boolean(string="It's export", default=False)
+    ucfp_number = fields.Char(string="UCFP")
 
     @api.onchange('phone')
     def _onchange_phone(self):
