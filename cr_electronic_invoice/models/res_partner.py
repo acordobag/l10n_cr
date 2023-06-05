@@ -17,6 +17,7 @@ class PartnerElectronic(models.Model):
     commercial_name = fields.Char()
     identification_id = fields.Many2one("identification.type")
     payment_methods_id = fields.Many2one("payment.methods", string="Payment Method")
+    ucfp_number = fields.Char(string="UCFP")
     has_exoneration = fields.Boolean(string="Has Exoneration?", required=False)
     type_exoneration = fields.Many2one("aut.ex", string="Authorization Type")
     exoneration_number = fields.Char()
@@ -32,8 +33,7 @@ class PartnerElectronic(models.Model):
                                                string='Economic Activities',
                                                context={'active_test': False})
     export = fields.Boolean(string="It's export", default=False)
-    ucfp_number = fields.Char(string="UCFP")
-
+    
     @api.onchange('phone')
     def _onchange_phone(self):
         if self.phone:
