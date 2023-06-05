@@ -34,7 +34,7 @@
             </xpath>
 
             <field name="category_id" position="after">
-                <!-- <field name="ucfp_number"/> -->
+                <field name="ucfp_number"/>
                 <field name="has_exoneration" attrs="{'invisible': [('supplier_rank', '>', 0)]}" />
                 <field name="export" attrs="{'invisible': [('supplier_rank', '>', 0)]}" />
             </field>
