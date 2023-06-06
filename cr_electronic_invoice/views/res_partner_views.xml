@@ -16,6 +16,7 @@
             <field name="vat" position="after">
                 <field name="identification_id"/>
                 <field name="supplier_rank" invisible="1" readonly="1"/>
+                <field name="commercial_name"/>
             </field>
 
             <xpath expr="//form/sheet/notebook" position="before">
@@ -34,7 +35,6 @@
             </xpath>
 
             <field name="category_id" position="after">
-                <field name="ucfp_number"/>
                 <field name="has_exoneration" attrs="{'invisible': [('supplier_rank', '>', 0)]}" />
                 <field name="export" attrs="{'invisible': [('supplier_rank', '>', 0)]}" />
             </field>

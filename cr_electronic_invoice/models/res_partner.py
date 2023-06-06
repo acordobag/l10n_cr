@@ -17,7 +17,6 @@ class PartnerElectronic(models.Model):
     commercial_name = fields.Char()
     identification_id = fields.Many2one("identification.type")
     payment_methods_id = fields.Many2one("payment.methods", string="Payment Method")
-    ucfp_number = fields.Char(string="UCFP")
     has_exoneration = fields.Boolean(string="Has Exoneration?", required=False)
     type_exoneration = fields.Many2one("aut.ex", string="Authorization Type")
     exoneration_number = fields.Char()
