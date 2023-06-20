@@ -442,7 +442,7 @@ class AccountInvoiceElectronic(models.Model):
         account = False
         analytic_account = False
         product = False
-
+        _logger.debug('Started process.')
         purchase_journal = self.env['account.journal'].search([('type', '=', 'purchase')], limit=1)
         default_account_id = purchase_journal.expense_account_id.id
         if default_account_id:

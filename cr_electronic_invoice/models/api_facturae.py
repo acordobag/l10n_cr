@@ -991,6 +991,8 @@ def send_message(inv, date_cr, xml, token, env):
 
 
 def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_account_id=False):
+    _logger.debug('Into load_xml_data')
+
     try:
         invoice_xml = etree.fromstring(base64.b64decode(invoice.xml_supplier_approval))
         doc_types = 'FacturaElectronica|NotaCreditoElectronica|NotaDebitoElectronica|TiqueteElectronico'
@@ -998,6 +1000,8 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
 
         if document_type == 'TiqueteElectronico':
             raise UserError(_("This is a TICKET only invoices are valid for taxes"))
+        
+        _logger.debug('Invoice type done.')
 
     except Exception as e:
         raise UserError(_("This XML file is not XML-compliant. Error: %s") % e)
@@ -1019,6 +1023,8 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
                                                                                              activity_node[0].text)],
                                                                                            limit=1)
         activity_id = activity.id
+        _logger.debug('Activity node found done. %s', activity_id)
+
 
     invoice.economic_activity_id = activity
     invoice.date_issuance = invoice_xml.xpath("inv:FechaEmision", namespaces=namespaces)[0].text
@@ -1064,6 +1070,7 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
 
     if partner:
         invoice.partner_id = partner
+        _logger.debug('Supplier found: %s', (partner.vat))
     else:
         new_partner = invoice.env['res.partner'].create({'name': nombre_emisor,
                                                          'vat': emisor,
@@ -1073,9 +1080,11 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
                                                          'phone': telefono_emisor,
                                                          'email': correo_emisor,
                                                          'street': otrassenas_emisor,
-                                                         'supplier': 'True'})
+                                                         'supplier_rank': '1'})
+
         if new_partner:
             invoice.partner_id = new_partner
+            _logger.debug('Supplier created: %s', (new_partner.vat))
         else:
             raise UserError(_('The provider in the invoice does not exists. ' +
                               'I tried to created without success. Please review it.'))
