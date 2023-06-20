@@ -1,6 +1,8 @@
 
 from odoo import models, fields, api, _
 
+_logger = logging.getLogger(__name__)
+
 
 class AccountInvoiceElectronic(models.Model):
     _inherit = "account.edi.format"
@@ -13,9 +15,9 @@ class AccountInvoiceElectronic(models.Model):
         :param journal:  The journal on which importing the invoice.
         :returns:        The created invoice.
         """
-        # TO OVERRIDE
-        self.ensure_one()
+        _logger.debug('Into load_xml_data new')
 
+        # TO OVERRIDE
         invoice = self.env['account.move']
 
         invoice.xml_supplier_approval = tree
