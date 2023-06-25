@@ -16,6 +16,7 @@ class AccountInvoiceElectronic(models.Model):
         :returns:        The created invoice.
         """
         _logger.debug('Into load_xml_data new')
+        self.ensure_one()
 
         # TO OVERRIDE
         invoice = self.env['account.move']
@@ -24,4 +25,11 @@ class AccountInvoiceElectronic(models.Model):
         invoice.fname_xml_supplier_approval = filename
         invoice.load_xml_data()
         
-        return super._create_invoice_from_xml_tree(filename, tree, journal)
+        return super()._create_invoice_from_xml_tree(filename, tree, journal)
+
+    def _is_compatible_with_journal(self, journal):
+        self.ensure_one()
+        res = super()._is_compatible_with_journal(journal)
+        if self.code != 'facturx_cr_1_0' or self._is_account_edi_ubl_cii_available():
+            return res
+        return journal.type == 'sale'
