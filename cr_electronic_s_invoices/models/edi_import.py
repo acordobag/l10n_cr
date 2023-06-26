@@ -31,6 +31,6 @@ class AccountInvoiceElectronic(models.Model):
     def _is_compatible_with_journal(self, journal):
         self.ensure_one()
         res = super()._is_compatible_with_journal(journal)
-        if self.code != 'facturx_cr_1_0' or self._is_account_edi_ubl_cii_available():
+        if self.code != 'facturx_cr_1_0':
             return res
         return journal.type == 'sale'
