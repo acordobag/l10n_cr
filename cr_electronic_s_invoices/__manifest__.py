@@ -20,6 +20,7 @@
         'account',
         ],
     'data': [
+        'data/edi-format.xml',
     ],
     'external_dependencies': {
         "python": [

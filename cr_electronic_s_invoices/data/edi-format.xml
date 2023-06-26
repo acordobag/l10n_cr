@@ -2,7 +2,7 @@
 <odoo>
     <data>
 
-        <record id="facturx_cr" model="account.edi.format">
+        <record id="facturx_cr_1_0" model="account.edi.format">
             <field name="name">Factur-X (CR)</field>
             <field name="code">facturx_cr_1_0</field>
         </record>

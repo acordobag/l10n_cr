@@ -8,6 +8,13 @@ _logger = logging.getLogger(__name__)
 class AccountInvoiceElectronic(models.Model):
     _inherit = "account.edi.format"
 
+    def _is_compatible_with_journal(self, journal):
+        self.ensure_one()
+        res = super()._is_compatible_with_journal(journal)
+        if self.code != 'facturx_cr_1_0':
+            return res
+        return journal.type == 'sale'
+
     def _create_invoice_from_xml_tree(self, filename, tree, journal=None):
         """ Create a new invoice with the data inside the xml.
 
@@ -27,10 +34,7 @@ class AccountInvoiceElectronic(models.Model):
         invoice.load_xml_data()
         
         return super()._create_invoice_from_xml_tree(filename, tree, journal)
-
-    def _is_compatible_with_journal(self, journal):
-        self.ensure_one()
-        res = super()._is_compatible_with_journal(journal)
-        if self.code != 'facturx_cr_1_0':
-            return res
-        return journal.type == 'sale'
+    
+    def _is_facturx(self, filename, tree):
+        return self.code == 'facturx_1_0_05'
+    
