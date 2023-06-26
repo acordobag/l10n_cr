@@ -46,15 +46,17 @@ class AccountJournalInherit(models.Model):
             raise UserError(_("This XML file is not XML-compliant. Error: %s") % e)
         attachment.write({'res_model': 'mail.compose.message'})
         decoders = self.env['account.move']._get_create_invoice_from_attachment_decoders()
-        invoice = False
-        for decoder in sorted(decoders, key=lambda d: d[0]):
-            invoice = decoder[1](attachment)
-            if invoice:
-                break
-        if not invoice:
-            invoice = self.env['account.move'].create({})
+        # invoice = False
+        #         # for decoder in sorted(decoders, key=lambda d: d[0]):
+        #         #     invoice = decoder[1](attachment)
+        #         #     if invoice:
+        #         #         break
+        #         # if not invoice:
+        invoice = self.env['account.move'].create({})
         invoice.fname_xml_supplier_approval = attachment.name
         invoice.xml_supplier_approval = attachment.datas
+        invoice.load_xml_data()
+
         return invoice
 
     def create_invoice_from_attachment(self, attachment_ids=[]):
