@@ -74,7 +74,7 @@ class AccountJournalInherit(models.Model):
         invoice.xml_supplier_approval = attachment.datas
         try:
             invoice.load_xml_data()
-            # invoice.action_post()
+            invoice.action_post()
         except Exception as e:
             raise e
 
