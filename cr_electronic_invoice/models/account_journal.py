@@ -82,9 +82,13 @@ class AccountJournalInherit(models.Model):
         invoices = self.env['account.move']
         for attachment in attachments:
             if ".xml" in attachment.name or ".XML" in attachment.name:
-                invoice = self.invoice_from_xml(attachment)
-                if invoice:
-                    invoices += invoice
+                try:
+                    invoice = self.invoice_from_xml(attachment)
+                    if invoice:
+                        invoices += invoice
+                except Exception as e:
+                    _logger.exception('FECR: ERROR Importing invoice %s', e)
+                    continue
             else:
                 attachment.write({'res_model': 'mail.compose.message'})
                 decoders = self.env['account.move']._get_create_invoice_from_attachment_decoders()
