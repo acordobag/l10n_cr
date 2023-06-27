@@ -88,7 +88,7 @@ class AccountJournalInherit(models.Model):
                     invoice = self.invoice_from_xml(attachment)
                 except Exception as e:
                     _logger.exception('FECR: ERROR Importing invoice %s', e)
-                    if index == len(attachments) - 1:
+                    if len(attachments) == 1:
                         raise UserError(_("Error: %s") % e)
                     invoice = False
                 if invoice:
