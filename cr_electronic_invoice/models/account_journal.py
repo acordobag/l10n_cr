@@ -42,11 +42,11 @@ class AccountJournalInherit(models.Model):
             document_type = re.search(document_names, invoice_xml.tag).group(0)
             if document_type == 'TiqueteElectronico':
                 _logger.exception('This is a TICKET only invoices are valid for taxes')
-                return self.env['account.move'].create({})
+                return False
                 # raise UserError(_("This is a TICKET only invoices are valid for taxes"))
         except Exception as e:
             _logger.exception('FECR: ERROR Importing invoice %s', e)
-            return self.env['account.move'].create({})
+            return False
             # raise UserError(_("This XML file is not XML-compliant. Error: %s") % e)
         attachment.write({'res_model': 'mail.compose.message'})
 
@@ -83,7 +83,8 @@ class AccountJournalInherit(models.Model):
         for attachment in attachments:
             if ".xml" in attachment.name or ".XML" in attachment.name:
                 invoice = self.invoice_from_xml(attachment)
-                invoices += invoice
+                if invoice:
+                    invoices += invoice
             else:
                 attachment.write({'res_model': 'mail.compose.message'})
                 decoders = self.env['account.move']._get_create_invoice_from_attachment_decoders()
