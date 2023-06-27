@@ -1029,7 +1029,7 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
     invoice.economic_activity_id = activity
     invoice.date_issuance = invoice_xml.xpath("inv:FechaEmision", namespaces=namespaces)[0].text
     invoice.invoice_date = invoice.date_issuance
-    invoice.tipo_documento = False
+    invoice.tipo_documento = 'CCE'
 
     emisor = invoice_xml.xpath("inv:Emisor/inv:Identificacion/inv:Numero", namespaces=namespaces)[0].text
     tipo_emisor = invoice_xml.xpath("inv:Emisor/inv:Identificacion/inv:Tipo", namespaces=namespaces)[0].text

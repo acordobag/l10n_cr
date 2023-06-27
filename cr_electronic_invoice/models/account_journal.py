@@ -55,7 +55,11 @@ class AccountJournalInherit(models.Model):
         invoice = self.env['account.move'].create({})
         invoice.fname_xml_supplier_approval = attachment.name
         invoice.xml_supplier_approval = attachment.datas
-        invoice.load_xml_data()
+        try:
+            invoice.load_xml_data()
+            invoice.action_post()
+        except Exception as e:
+            _logger.exception('FECR: ERROR Importing invoice %s', e)
 
         return invoice
 
