@@ -48,7 +48,7 @@ class AccountJournalInherit(models.Model):
             _logger.exception('FECR: ERROR Importing invoice %s', e)
             return False
             # raise UserError(_("This XML file is not XML-compliant. Error: %s") % e)
-        attachment.write({'res_model': 'mail.compose.message'})
+        # attachment.write({'res_model': 'mail.compose.message'})
 
         # decoders = self.env['account.move']._get_create_invoice_from_attachment_decoders()
         # invoice = False
@@ -64,7 +64,7 @@ class AccountJournalInherit(models.Model):
             invoice.load_xml_data()
             invoice.action_post()
         except Exception as e:
-            _logger.exception('FECR: ERROR Importing invoice %s', e)
+            raise e
 
         return invoice
 
@@ -80,15 +80,19 @@ class AccountJournalInherit(models.Model):
         if not attachments:
             raise UserError(_("No attachment was provided"))
         invoices = self.env['account.move']
+        index = 0
         for attachment in attachments:
+
             if ".xml" in attachment.name or ".XML" in attachment.name:
                 try:
                     invoice = self.invoice_from_xml(attachment)
-                    if invoice:
-                        invoices += invoice
                 except Exception as e:
                     _logger.exception('FECR: ERROR Importing invoice %s', e)
-                    continue
+                    if index == len(attachments) - 1:
+                        raise UserError(_("Error: %s") % e)
+                    invoice = False
+                if invoice:
+                    invoices += invoice
             else:
                 attachment.write({'res_model': 'mail.compose.message'})
                 decoders = self.env['account.move']._get_create_invoice_from_attachment_decoders()
@@ -101,7 +105,7 @@ class AccountJournalInherit(models.Model):
                     invoice = self.env['account.move'].create({})
                 invoice.with_context(no_new_invoice=True).message_post(attachment_ids=[attachment.id])
                 invoices += invoice
-
+            index += 1
         action_vals = {
             'name': _('Generated Documents'),
             'domain': [('id', 'in', invoices.ids)],
@@ -110,6 +114,10 @@ class AccountJournalInherit(models.Model):
             'type': 'ir.actions.act_window',
             'context': self._context
         }
+
+        if len(invoices) == 0:
+            raise UserError("There was no invoice to process.")
+
         if len(invoices) == 1:
             action_vals.update({'res_id': invoices[0].id, 'view_mode': 'form'})
         else:
