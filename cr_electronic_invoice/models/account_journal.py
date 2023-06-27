@@ -41,7 +41,9 @@ class AccountJournalInherit(models.Model):
             document_names = "FacturaElectronica|NotaCreditoElectronica|NotaDebitoElectronica|TiqueteElectronico"
             document_type = re.search(document_names, invoice_xml.tag).group(0)
             if document_type == 'TiqueteElectronico':
-                raise UserError(_("This is a TICKET only invoices are valid for taxes"))
+                _logger.exception('This is a TICKET only invoices are valid for taxes')
+                return 
+                # raise UserError(_("This is a TICKET only invoices are valid for taxes"))
         except Exception as e:
             _logger.exception('FECR: ERROR Importing invoice %s', e)
             return 
