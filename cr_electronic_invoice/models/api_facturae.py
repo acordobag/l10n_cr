@@ -996,7 +996,8 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
     try:
         invoice_xml = etree.fromstring(base64.b64decode(invoice.xml_supplier_approval))
         doc_types = 'FacturaElectronica|NotaCreditoElectronica|NotaDebitoElectronica|TiqueteElectronico'
-        document_type = re.search(doc_types, invoice_xml.tag).group(0)
+        regex_result = re.search(doc_types, invoice_xml.tag)
+        document_type = regex_result.group(0)
 
         if document_type == 'TiqueteElectronico':
             raise UserError(_("This is a TICKET only invoices are valid for taxes"))
