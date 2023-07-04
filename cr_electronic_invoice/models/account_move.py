@@ -1129,7 +1129,7 @@ class AccountInvoiceElectronic(models.Model):
                                     line["codigoCabys"] = inv_line.product_id.cabys_code
                                 elif inv_line.product_id.categ_id and inv_line.product_id.categ_id.cabys_code:
                                     line["codigoCabys"] = inv_line.product_id.categ_id.cabys_code
-                                else:
+                                elif inv.tipo_documento != 'NC':
                                     _no_cabys_code = _(f'Warning!.\nLine without CABYS code: {inv_line.name}')
                                     continue
                             else:
