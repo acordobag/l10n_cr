@@ -207,9 +207,10 @@ class AccountInvoiceElectronic(models.Model):
                 inv.economic_activity_id = inv.company_id.activity_id
 
     @api.onchange('partner_id')
-    def _onchange_partner_id(self):
+    def _onchange_partner_id(self, validate_payment = True):
         super()._onchange_partner_id()
-        self.payment_methods_id = self.partner_id.payment_methods_id
+        if(validate_payment):
+            self.payment_methods_id = self.partner_id.payment_methods_id
 
         if self.move_type in ('in_invoice', 'in_refund'):
             if self.partner_id:
@@ -1411,7 +1412,7 @@ class AccountInvoiceElectronic(models.Model):
                 inv.tipo_documento = 'disabled'
                 continue
 
-            self._onchange_partner_id()
+            self._onchange_partner_id(validate_payment=False)
 
             if inv.partner_id.has_exoneration:
                 if inv.partner_id.date_expiration and (inv.partner_id.date_expiration > datetime.date.today()):
