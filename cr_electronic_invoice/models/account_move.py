@@ -1407,6 +1407,7 @@ class AccountInvoiceElectronic(models.Model):
     def action_post(self):
         # Revisamos si el ambiente para Hacienda está habilitado
         for inv in self:
+            narration_save = inv.narration
             if inv.company_id.frm_ws_ambiente == 'disabled':
                 super(AccountInvoiceElectronic, inv).action_post()
                 inv.tipo_documento = 'disabled'
@@ -1501,6 +1502,7 @@ class AccountInvoiceElectronic(models.Model):
                     })
 
             super().action_post()
+
             if not inv.number_electronic:
                 # if journal doesn't have sucursal use default from company
                 sucursal_id = inv.journal_id.sucursal or self.env.user.company_id.sucursal_MR
@@ -1519,6 +1521,8 @@ class AccountInvoiceElectronic(models.Model):
 
             inv.name = inv.sequence
             inv.state_tributacion = False
+            
+            inv.narration = narration_save
 
     @api.onchange('amount_total')
     def update_text_amount(self):
