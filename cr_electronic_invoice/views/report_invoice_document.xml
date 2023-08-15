@@ -6,7 +6,7 @@
                 <t t-set="o" t-value="o.with_context(lang=lang)" />
                 <t t-set="address">
                     <br/>
-                    <div class="w-100">
+                    <div class="col-12">
                         <h2>
                             <span t-if="o.move_type == 'out_invoice'">Customer</span>
                             <span t-if="o.move_type == 'out_refund'">Customer</span>
