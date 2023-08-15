@@ -230,7 +230,7 @@
                         <span t-field="o.invoice_payment_term_id.note"/>
                     </p>
                     <p t-if="o.invoice_user_id" name="seller">
-                        <strong>Vendedor: </strong><span t-field="o.invoice_user_id.name"/>
+                        <span>Vendedor: </span><span t-field="o.invoice_user_id.name"/>
                     </p>
                     <p t-if="o.narration" name="comment">
                         <span t-field="o.narration"/>
@@ -290,10 +290,10 @@
             <t t-if="address">
                 <div class="address row">
                     <t t-if="information_block">
-                        <t t-set="colclass" t-value="'col-5 offset-1'"/>
-                        <div name="information_block" class="col-6">
+                        <t t-set="colclass" t-value="'col-8 offset-1'"/>
+                        <!-- <div name="information_block" class="col-6">
                             <t t-raw="information_block"/>
-                        </div>
+                        </div> -->
                     </t>
                     <div name="address" t-att-class="colclass">
                         <t t-raw="address"/>
