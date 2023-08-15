@@ -15,6 +15,8 @@
                     <div class="row">
                         <div class="col-6">
                             <address t-field="o.partner_id" t-options='{"widget": "contact", "fields": ["name"], "no_marker": True}' />
+                        </div>
+                        <div class="col-6">
                             <div t-if="o.partner_id.vat" class="mt16">
                                 <t t-if="o.company_id.country_id.vat_label" t-esc="o.company_id.country_id.vat_label" id="inv_tax_id_label"/>
                                 <t t-else="">Tax ID</t>: <span t-field="o.partner_id.vat"/>
@@ -22,8 +24,6 @@
                             <div t-if="o.partner_id.phone" class="mt16">
                                 <t>Teléfono</t>: <span t-field="o.partner_id.phone"/>
                             </div>
-                        </div>
-                        <div class="col-6">
                             <div t-if="o.payment_methods_id" class="mt16">
                                 Payment method: <span t-field="o.payment_methods_id.name"/>
                             </div>
@@ -295,7 +295,7 @@
 
         <!-- EXTERNAL LAYOUT-->
         <template id="web.address_layout">
-            <t t-set="colclass" t-value="('col-md-8' if report_type == 'html' else 'col-8') + ' ml-auto'"/>
+            <t t-set="colclass" t-value="('col-md-12' if report_type == 'html' else 'col-12')"/>
             <t t-if="address">
                 <div class="address row">
                     <!-- <t t-if="information_block"> -->
