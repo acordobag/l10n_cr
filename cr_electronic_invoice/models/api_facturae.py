@@ -642,13 +642,13 @@ def gen_xml_v43(inv, sale_conditions, total_servicio_gravado,
         sb.append('<Razon>' + str(razon_referencia) + '</Razon>')
         sb.append('</InformacionReferencia>')
 
-    if invoice_comments or hasattr(inv, 'ref'):
+    if invoice_comments or (hasattr(inv, 'ref') and inv.ref):
         sb.append('<Otros>')
 
         if invoice_comments:
             sb.append('<OtroTexto>' + str(invoice_comments) + '</OtroTexto>')
 
-        if inv.ref != False and inv.tipo_documento == 'FE':
+        if inv.ref and inv.tipo_documento == 'FE':
             sb.append('<OtroContenido>')
             sb.append('<OrdenCompra>' + str(inv.ref) + '</OrdenCompra>')
             sb.append('</OtroContenido>')
