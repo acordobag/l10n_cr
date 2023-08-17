@@ -1408,7 +1408,7 @@ class AccountInvoiceElectronic(models.Model):
         # Revisamos si el ambiente para Hacienda está habilitado
         for inv in self:
             narration_save = inv.narration
-            if inv.company_id.frm_ws_ambiente == 'disabled':
+            if inv.company_id.frm_ws_ambiente == 'disabled' or inv.tipo_documento == 'disabled':
                 super(AccountInvoiceElectronic, inv).action_post()
                 inv.tipo_documento = 'disabled'
                 continue
