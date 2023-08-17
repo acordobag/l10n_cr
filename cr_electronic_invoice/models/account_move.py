@@ -1677,5 +1677,6 @@ class AccountInvoiceElectronic(models.Model):
             if attachment_resp:
                 tab_id.append(attachment_resp.id)
 
-        url = f'/web/binary/download_document?tab_id={tab_id}&invoice_id={invoice_id}'
-        return url
+            url = f'/web/binary/download_document?tab_id={tab_id}&invoice_id={invoice_id}'
+            return url
+        return False
