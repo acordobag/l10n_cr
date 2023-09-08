@@ -1010,8 +1010,8 @@ class AccountInvoiceElectronic(models.Model):
                     if (inv.invoice_id or inv.not_loaded_invoice) and \
                        inv.reference_code_id and inv.reference_document_id:
                         if inv.invoice_id:
-                            if inv.invoice_id.number_electronic:
-                                numero_documento_referencia = inv.invoice_id.number_electronic
+                            if inv.invoice_id.name:
+                                numero_documento_referencia = inv.invoice_id.name
                                 fecha_emision_referencia = inv.invoice_id.date_issuance
                             else:
                                 numero_documento_referencia = inv.invoice_id and \
