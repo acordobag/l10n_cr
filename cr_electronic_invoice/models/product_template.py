@@ -28,6 +28,8 @@ class ProductElectronic(models.Model):
     non_tax_deductible = fields.Boolean(string='Is Non Tax Deductible',
                                         help='Indicates if this product is non-tax deductible')
 
+    company_id = fields.Many2one('res.company', string="Company", index=True, default=lambda self: self.env.company)
+
 
 class ProductCategory(models.Model):
     _inherit = "product.category"
