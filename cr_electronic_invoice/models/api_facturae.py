@@ -1076,7 +1076,7 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
     else:
         new_partner = invoice.env['res.partner'].create({'name': nombre_emisor,
                                                          'vat': emisor,
-                                                         'identification_id': tipo_emisor,
+                                                         'identification_id': int(tipo_emisor),
                                                          'type': 'contact',
                                                          'country_id': pais_emisor,
                                                          'phone': telefono_emisor,
