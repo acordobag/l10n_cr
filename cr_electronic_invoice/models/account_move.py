@@ -172,22 +172,22 @@ class AccountInvoiceElectronic(models.Model):
     comp_amount_total = fields.Monetary(string='Total', readonly=True, compute='_compute_amount_total')
 
     def _compute_amount_total(self):
-        self.ensure_one()
-        currency = self.currency_id
-        currency_rate = 1
-        if not (currency.name == self.company_id.currency_id.name):
-            currency_rate = round(1.0 / currency.rate, 5)
-            
-        self.comp_amount_total = self.amount_total * currency_rate
+        for rec in self : 
+            currency = rec.currency_id
+            currency_rate = 1
+            if not (currency.name == rec.company_id.currency_id.name):
+                currency_rate = round(1.0 / currency.rate, 5)
+                
+            rec.comp_amount_total = rec.amount_total * currency_rate
         
     def _compute_amount_untaxed(self):
-        self.ensure_one()
-        currency = self.currency_id
-        currency_rate = 1
-        if not (currency.name == self.company_id.currency_id.name):
-            currency_rate = round(1.0 / currency.rate, 5)
-            
-        self.comp_amount_untaxed = self.amount_untaxed * currency_rate
+        for rec in self :
+            currency = rec.currency_id
+            currency_rate = 1
+            if not (currency.name == rec.company_id.currency_id.name):
+                currency_rate = round(1.0 / currency.rate, 5)
+                
+            rec.comp_amount_untaxed = rec.amount_untaxed * currency_rate
 
 
     def _compute_qr_code(self):
