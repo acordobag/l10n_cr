@@ -119,8 +119,12 @@
                 <field name="sequence" string="Consecutive" optional="show"/>
                 <field name="move_type" invisible="1" readonly="1" optional="show"/>
                 <field name="state_tributacion" string="State FE" optional="show"/>
-                <field name="comp_amount_untaxed" string="Total sin impuestos" optional="show"/>
-                <field name="comp_amount_total" string="Total" optional="show"/>
+            </field>
+            <field name="company_id" position="after">
+                <field name="amount_untaxed_signed"  string="Total sin impuestos" optional="hide"/>
+                <field name="amount_total_signed" sum= "Total" string="Total" optional="hide"/>
+                <field name="comp_amount_untaxed" sum= "Total" string="Total sin impuestos" optional="show"/>
+                <field name="comp_amount_total" sum= "Total" string="Total" optional="show"/>
             </field>
         </field>
     </record>
