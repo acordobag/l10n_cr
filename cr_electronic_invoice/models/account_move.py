@@ -168,7 +168,7 @@ class AccountInvoiceElectronic(models.Model):
                               store=True, index=True, help="The Parnter Tax Identification Number.")
     company_vat = fields.Char(string='Company Tax ID', related="partner_id.vat",
                               store=True, index=True, help="Your Company Tax Identification Number.")
-    comp_amount_tax = fields.Monetary(string='Total Taxes', readonly=True, compute='_compute_amount_tax')
+    comp_amount_untaxed = fields.Monetary(string='Total Untaxed', readonly=True, compute='_compute_amount_untaxed')
     comp_amount_total = fields.Monetary(string='Total', readonly=True, compute='_compute_amount_total')
 
     def _compute_amount_total(self):
@@ -179,13 +179,13 @@ class AccountInvoiceElectronic(models.Model):
             
         self.comp_amount_total = self.amount_total * currency_rate
         
-    def _compute_amount_tax(self):
+    def _compute_amount_untaxed(self):
         currency = self.currency_id
         currency_rate = 1
         if not (currency.name == self.company_id.currency_id.name):
             currency_rate = round(1.0 / currency.rate, 5)
             
-        self.comp_amount_tax = self.amount_total * currency_rate
+        self.comp_amount_untaxed = self.amount_untaxed * currency_rate
 
 
     def _compute_qr_code(self):
