@@ -32,6 +32,7 @@ class PartnerElectronic(models.Model):
                                                string='Economic Activities',
                                                context={'active_test': False})
     export = fields.Boolean(string="It's export", default=False)
+    oc_xml = fields.Char(string="OC XML", default="OC")
     
     @api.onchange('phone')
     def _onchange_phone(self):

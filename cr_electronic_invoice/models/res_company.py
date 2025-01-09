@@ -97,8 +97,6 @@ class CompanyElectronic(models.Model):
                                        help="Last API EXONET Response, this allows debugging errors if they exist")
     url_base_exo = fields.Char(string="URL Base EXONET", help="URL Base ENDPOINT EXONET",
                                default="https://api.hacienda.go.cr/fe/ex?")
-    oc_name = fields.Char(string="Orden de compra campo", default="OrdenCompra")
-
 
     @api.constrains('invoice_qr_type', 'invoice_field_ids')
     def check_invoice_field_ids(self):

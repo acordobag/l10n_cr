@@ -13,6 +13,7 @@
         ''',
     'depends': [
         'base',
+        'res',
         'product',
         'uom',
         'sale_management',

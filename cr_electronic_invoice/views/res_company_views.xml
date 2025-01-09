@@ -89,10 +89,6 @@
                     </group>
                 </page>
             </xpath>
-
-            <field name="ucfp_number" position="after">
-                <field name="oc_name"/>
-            </field>
         </field>
     </record>
 
