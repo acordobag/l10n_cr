@@ -1011,7 +1011,7 @@ class AccountInvoiceElectronic(models.Model):
                        inv.reference_code_id and inv.reference_document_id:
                         if inv.invoice_id:
                             if inv.invoice_id.name:
-                                numero_documento_referencia = inv.invoice_id.name
+                                numero_documento_referencia = inv.invoice_id.number_electronic
                                 fecha_emision_referencia = inv.invoice_id.date_issuance
                             else:
                                 numero_documento_referencia = inv.invoice_id and \
@@ -1293,7 +1293,7 @@ class AccountInvoiceElectronic(models.Model):
                     total_impuestos = round(total_impuestos, 5)
                     total_descuento = round(total_descuento, 5)
                     # ESTE METODO GENERA EL XML DIRECTAMENTE DESDE PYTHON
-                    xml_string_builder = api_facturae.gen_xml_v43(
+                    xml_string_builder = api_facturae.gen_xml_v44(
                         inv, sale_conditions, total_servicio_gravado,
                         total_servicio_exento, total_servicio_exonerado,
                         total_mercaderia_gravado, total_mercaderia_exento,

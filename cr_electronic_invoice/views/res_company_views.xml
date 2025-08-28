@@ -87,7 +87,11 @@
                             <field name="terminal_MR"/>
                         </group>
                     </group>
-                </page>
+
+                <group>
+                    <field name="x_proveedor_sistemas"/>
+                </group>
+</page>
             </xpath>
         </field>
     </record>

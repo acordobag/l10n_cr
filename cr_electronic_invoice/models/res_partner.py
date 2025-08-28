@@ -94,6 +94,8 @@ class PartnerElectronic(models.Model):
                         raise UserError(_('La identificación tipo NITE debe contener 10 dígitos, ' +
                                           'sin ceros al inicio y sin guiones.'))
 
+        self.action_get_economic_activities()
+
     def action_get_economic_activities(self):
         if self.vat:
             json_response = api_facturae.get_economic_activities(self)
@@ -113,7 +115,7 @@ class PartnerElectronic(models.Model):
                 self.name = json_response["name"]
 
                 if len(a_codes) >= 1:
-                    self.activity_id = economic_activities[0]
+                    self.activity_id = self.economic_activities_ids[0].id
             else:
                 alert = {
                     'title': json_response["status"],
