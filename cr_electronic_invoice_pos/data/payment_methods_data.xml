@@ -28,6 +28,16 @@
         <field name="name">Recaudado por tercero</field>
     </record>
 
+    <record id="PaymentMethods_6" model="pos.payment.method">
+        <field name="sequence">06</field>
+        <field name="name">SINPE MÓVIL</field>
+    </record>
+
+    <record id="PaymentMethods_7" model="pos.payment.method">
+        <field name="sequence">07</field>
+        <field name="name">Plataformas Dígitales</field>
+    </record>
+
     <record id="PaymentMethods_99" model="pos.payment.method">
         <field name="sequence">99</field>
         <field name="name">Otros (se debe indicar el medio de pago)</field>
