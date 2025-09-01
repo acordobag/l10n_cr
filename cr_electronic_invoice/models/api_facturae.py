@@ -378,7 +378,8 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
     sb.append('<Tipo>' + issuing_company.identification_id.code + '</Tipo>')
     sb.append('<Numero>' + issuing_company.vat + '</Numero>')
     sb.append('</Identificacion>')
-    sb.append('<NombreComercial>' + escape(str(issuing_company.commercial_name or 'NA')) + '</NombreComercial>')
+    if issuing_company.commercial_name:
+        sb.append('<NombreComercial>' + escape(str(issuing_company.commercial_name or 'NA')) + '</NombreComercial>')
     sb.append('<Ubicacion>')
     sb.append('<Provincia>' + issuing_company.state_id.code + '</Provincia>')
     sb.append('<Canton>' + issuing_company.county_id.code + '</Canton>')
