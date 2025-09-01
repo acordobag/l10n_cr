@@ -51,6 +51,10 @@
                     </group>
                 </page>
             </xpath>
+
+            <field name="category_id" position="after">
+                <field name="oc_xml"/>
+            </field>
         </field>
     </record>
 

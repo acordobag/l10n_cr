@@ -653,7 +653,8 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
         if invoice_comments:
             sb.append('<OtroTexto>' + str(invoice_comments) + '</OtroTexto>')
         if inv.ref and inv.tipo_documento == 'FE':
-            sb.append('<OtroTexto codigo="OrdenCompra">' + str(inv.ref) + '</OtroTexto>')
+            sb.append('<OtroTexto codigo="'+ inv.partner_id.oc_xml +'">' + str(inv.ref) + '</OtroTexto>')
+
         sb.append('</Otros>')
 
     sb.append('</' + fe_enums.tagName[inv.tipo_documento] + '>')
