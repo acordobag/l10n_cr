@@ -168,26 +168,22 @@ class AccountInvoiceElectronic(models.Model):
                               store=True, index=True, help="The Parnter Tax Identification Number.")
     company_vat = fields.Char(string='Company Tax ID', related="partner_id.vat",
                               store=True, index=True, help="Your Company Tax Identification Number.")
-    comp_amount_untaxed = fields.Monetary(string='Total Untaxed', readonly=True, compute='_compute_amount_untaxed')
-    comp_amount_total = fields.Monetary(string='Total', readonly=True, compute='_compute_amount_total')
+    comp_amount_untaxed = fields.Monetary(string='Total Untaxed', readonly=True, compute='_compute_amount_untaxed', currency_field='company_currency_id')
+    comp_amount_total = fields.Monetary(string='Total', readonly=True, compute='_compute_amount_total', currency_field='company_currency_id')
 
     def _compute_amount_total(self):
-        for rec in self : 
-            currency = rec.currency_id
-            currency_rate = 1
-            if not (currency.name == rec.company_id.currency_id.name):
-                currency_rate = round(1.0 / currency.rate, 5)
-                
-            rec.comp_amount_total = rec.amount_total * currency_rate
+        for rec in self:
+            record = rec.currency_id
+            local = rec.company_id.currency_id
+
+            rec.comp_amount_total = record.compute(rec.amount_total, local)
         
     def _compute_amount_untaxed(self):
-        for rec in self :
-            currency = rec.currency_id
-            currency_rate = 1
-            if not (currency.name == rec.company_id.currency_id.name):
-                currency_rate = round(1.0 / currency.rate, 5)
-                
-            rec.comp_amount_untaxed = rec.amount_untaxed * currency_rate
+        for rec in self:
+            record = rec.currency_id
+            local = rec.company_id.currency_id
+
+            rec.comp_amount_untaxed = record.compute(rec.amount_untaxed, local)
 
 
     def _compute_qr_code(self):
