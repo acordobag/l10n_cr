@@ -32,15 +32,15 @@
         <field name="active">true</field>
     </record>
 
-    <record id="cr_electronic_invoice.PaymentMethods_5" model="payment.methods">
+    <record id="cr_electronic_invoice.PaymentMethods_6" model="payment.methods">
         <field name="sequence">06</field>
-        <field name="name">SINPE Móvi</field>
+        <field name="name">SINPE Móvil</field>
         <field name="active">true</field>
     </record>
 
-    <record id="cr_electronic_invoice.PaymentMethods_5" model="payment.methods">
+    <record id="cr_electronic_invoice.PaymentMethods_7" model="payment.methods">
         <field name="sequence">07</field>
-        <field name="name">Plataforma digital</field>
+        <field name="name">Plataforma dígital</field>
         <field name="active">true</field>
     </record>
 
