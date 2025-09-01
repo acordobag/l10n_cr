@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <record id="product_parafiscal" model="product.template">
+    <!-- <record id="product_parafiscal" model="product.template">
         <field name="name">Contribución parafiscal</field>
         <field name="type">consu</field>
         <field name="default_code">01</field>
@@ -72,6 +72,6 @@
         <field name="categ_id" ref="product_category_otros_cargos" />
         <field name="code_type_id" ref="cr_electronic_invoice.CodeTypeProduct_99" />
         <field name="taxes_id" eval="[(5,0,0)]" />
-    </record>
+    </record> -->
 
 </odoo>
