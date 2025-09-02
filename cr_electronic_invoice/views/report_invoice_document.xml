@@ -15,14 +15,14 @@
                     <div class="row">
                         <div class="col-6">
                             <address t-field="o.partner_id" t-options='{"widget": "contact", "fields": ["name"], "no_marker": True}' />
+                            <div t-if="o.partner_id.activity_id" class="mt16">
+                                <t>Actividad Económica</t>: <span t-field="o.partner_id.activity_id.code"/>
+                            </div>
                         </div>
                         <div class="col-6">
                             <div t-if="o.partner_id.vat" class="mt16">
                                 <t t-if="o.company_id.country_id.vat_label" t-esc="o.company_id.country_id.vat_label" id="inv_tax_id_label"/>
                                 <t t-else="">Tax ID</t>: <span t-field="o.partner_id.vat"/>
-                            </div>
-                            <div t-if="o.partner_id.activity_id" class="mt16">
-                            <t>Actividad Económica</t>: <span t-field="o.partner_id.activity_id.code"/>
                             </div>
                             <div t-if="o.partner_id.phone" class="mt16">
                                 <t>Teléfono</t>: <span t-field="o.partner_id.phone"/>
