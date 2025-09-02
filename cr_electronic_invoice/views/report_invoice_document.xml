@@ -16,6 +16,9 @@
                         <div class="col-6">
                             <address t-field="o.partner_id" t-options='{"widget": "contact", "fields": ["name"], "no_marker": True}' />
                         </div>
+                        <div t-if="o.partner_id.activity_id" class="mt16">
+                            <t>Actividad Económica</t>: <span t-field="o.partner_id.activity_id.code"/>
+                        </div>
                         <div class="col-6">
                             <div t-if="o.partner_id.vat" class="mt16">
                                 <t t-if="o.company_id.country_id.vat_label" t-esc="o.company_id.country_id.vat_label" id="inv_tax_id_label"/>
@@ -257,7 +260,8 @@
                         </p>
                     </div>
                     <p>
-                      <span>Autorizada mediante resolución N° DGT-R-033-2019 del 20 de junio de 2019.</span>
+                      <span>AUTORIZADO MEDIANTE RESOLUCION MH-DGT-RES-0027-2024 DEL 13-11-2024 
+                        <br/>Factura Electronica Version 4.4</span>
                     </p>
 
                     <div style="width:700px; height:110px;">
