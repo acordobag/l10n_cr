@@ -567,13 +567,13 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
                     k = (codigo, code_key)
                     desglose_impuesto[k] = float(desglose_impuesto.get(k, 0.0)) + float(b.get('monto') or 0.0)
 
-            # valor_asumido = v.get('impuesto_asumido_emisor_fabrica')
-            # if valor_asumido is not None:
-            #     sb.append('<ImpuestoAsumidoEmisorFabrica>' + _fmt(valor_asumido) + '</ImpuestoAsumidoEmisorFabrica>')
-            # else:
-            #     sb.append('<ImpuestoAsumidoEmisorFabrica>0</ImpuestoAsumidoEmisorFabrica>')
+            valor_asumido = v.get('impuesto_asumido_emisor_fabrica')
+            if valor_asumido is not None:
+                sb.append('<ImpuestoAsumidoEmisorFabrica>' + _fmt(valor_asumido) + '</ImpuestoAsumidoEmisorFabrica>')
+            else:
+                sb.append('<ImpuestoAsumidoEmisorFabrica>0</ImpuestoAsumidoEmisorFabrica>')
             # ImpuestoNeto al final de los impuestos de la línea
-            sb.append('<ImpuestoNeto>' + _fmt(v['impuestoNeto']) + '</ImpuestoNeto>')
+            # sb.append('<ImpuestoNeto>' + _fmt(v['impuestoNeto']) + '</ImpuestoNeto>')
             sb.append('<MontoTotalLinea>' + _fmt(v['montoTotalLinea']) + '</MontoTotalLinea>')
             sb.append('</LineaDetalle>')
         sb.append('</DetalleServicio>')
