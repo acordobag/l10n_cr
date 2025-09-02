@@ -51,6 +51,9 @@
                 <field name="date_issuance" readonly="1" attrs="{'invisible':[('move_type','not in', ('out_invoice', 'out_refund','in_invoice', 'in_refund'))]}"/>
                 <field name="tipo_documento" attrs="{'readonly':[('state','!=','draft')],'invisible':[('move_type','not in', ('out_invoice', 'out_refund','in_invoice', 'in_refund'))],'required':[('move_type','in', ('out_invoice', 'out_refund','in_invoice', 'in_refund'))]}"/>
                 <field name="payment_methods_id" attrs="{'readonly':[('state','!=','draft')],'invisible':[('move_type','not in', ('out_invoice', 'out_refund','in_invoice', 'in_refund'))],'required':[('move_type','in', ('out_invoice', 'out_refund','in_invoice', 'in_refund'))]}"/>
+
+                <!-- AÑADE el booleano a la vista (oculto) para poder usarlo en attrs -->
+                <field name="is_payment_method_99" invisible="1"/>
                 <!-- Sólo visible y requerido si el método = 99 -->
                 <field name="payment_method_otros"
                 placeholder="Ej.: Transferencia internacional, pago en especie, etc."
