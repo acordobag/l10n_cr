@@ -328,8 +328,9 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
         for payment in getattr(inv, 'payment_ids', []):
             code = str(getattr(payment.payment_method_id, 'sequence', '') or '01')
             amount = float(getattr(payment, 'amount', 0.0) or 0.0)
+            descOtros = str(getattr(payment, 'notes', '') or 'Otros no especificado.')
             if amount:
-                medios_pago.append({'tipo': code, 'monto': amount})
+                medios_pago.append({'tipo': code, 'monto': amount, 'otros': descOtros})
         if not medios_pago:
             medios_pago.append({'tipo': '01', 'monto': total_comprobante_tmp})
     else:
@@ -337,7 +338,11 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
         cod_moneda = str(inv.currency_id.name)
         plazo_credito = str(inv.invoice_payment_term_id and inv.invoice_payment_term_id.line_ids[:1].days or 0)
         code = str(inv.payment_methods_id.sequence or '01')
-        medios_pago.append({'tipo': code, 'monto': total_comprobante_tmp})
+        otros = (inv.payment_method_otros or '').strip()
+        mp = {'tipo': code, 'monto': total_comprobante_tmp}
+        if code == '99':
+            mp['otros'] = otros
+        medios_pago.append(mp)
 
     if inv.tipo_documento == 'FEC':
         issuing_company = inv.partner_id
@@ -489,7 +494,11 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
             # Descuento (si aplica)
             if v.get('montoDescuento'):
                 sb.append('<Descuento>')
-                sb.append('<MontoDescuento>' + str(v['montoDescuento']) + '</MontoDescuento>')
+                sb.append('<MontoDescuento>' + str(v['montoDescuento']) + '<MontoDescuento>')
+                
+                cod_desc = str(v.get('codigoDescuento') or '99')      # usa el tuyo; '99' = Otros (si aplicara)
+                sb.append(f'<CodigoDescuento>{cod_desc}</CodigoDescuento>')
+                
                 if v.get('naturalezaDescuento'):
                     sb.append('<NaturalezaDescuento>' + str(v['naturalezaDescuento']) + '</NaturalezaDescuento>')
                 # (Opcional en 4.4) CódigoDescuento si lo manejas:
@@ -629,7 +638,7 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
     for mp in medios_pago[:4]:
         sb.append('<MedioPago>')
         sb.append('<TipoMedioPago>' + str(mp.get('tipo') or '01') + '</TipoMedioPago>')
-        if (mp.get('tipo') == '99') and mp.get('otros'):
+        if (mp.get('tipo') == '99'):
             sb.append('<MedioPagoOtros>' + escape(str(mp['otros'])[:100]) + '</MedioPagoOtros>')
         sb.append('<TotalMedioPago>' + ('%0.5f' % float(mp.get('monto', 0.0))).rstrip('0').rstrip('.') + '</TotalMedioPago>')
         sb.append('</MedioPago>')

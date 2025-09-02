@@ -170,6 +170,51 @@ class AccountInvoiceElectronic(models.Model):
                               store=True, index=True, help="Your Company Tax Identification Number.")
     comp_amount_untaxed = fields.Monetary(string='Total Untaxed', readonly=True, compute='_compute_amount_untaxed', currency_field='company_currency_id')
     comp_amount_total = fields.Monetary(string='Total', readonly=True, compute='_compute_amount_total', currency_field='company_currency_id')
+    
+    
+    # Texto libre solicitado por MH cuando TipoMedioPago = 99
+    # XSD 4.4: máx 100 caracteres
+    payment_method_otros = fields.Char(
+        string='Medio de pago (otros)',
+        help="Requerido solo si el Tipo de Medio de Pago es 99 (OTRO). Máximo 100 caracteres.",
+        size=100
+    )
+
+    # Banderita sólo para attrs de la vista
+    is_payment_method_99 = fields.Boolean(
+        compute='_compute_is_payment_method_99',
+        store=False
+    )
+
+    @api.depends('payment_methods_id.sequence')
+    def _compute_is_payment_method_99(self):
+        for move in self:
+            code = str(move.payment_methods_id.sequence or '')
+            move.is_payment_method_99 = (code == '99')
+
+    @api.onchange('payment_methods_id')
+    def _onchange_payment_methods_id_clear_otros(self):
+        # si deja de ser 99, limpiamos el texto
+        for move in self:
+            if not move.is_payment_method_99:
+                move.payment_method_otros = False
+
+    @api.constrains('payment_methods_id', 'payment_method_otros')
+    def _check_medio_pago_99(self):
+        for move in self:
+            code = str(move.payment_methods_id.sequence or '')
+            if code == '99':
+                if not (move.payment_method_otros or '').strip():
+                    raise ValidationError(
+                        _("Cuando el tipo de medio de pago es '99 - OTRO', debe indicar el campo "
+                          "'Medio de pago (otros)'.")
+                    )
+                if len(move.payment_method_otros) > 100:
+                    raise ValidationError(
+                        _("El texto de 'Medio de pago (otros)' supera los 100 caracteres permitidos por el XSD 4.4.")
+                    )
+    
+    
 
     def _compute_amount_total(self):
         for rec in self:

@@ -51,6 +51,10 @@
                 <field name="date_issuance" readonly="1" attrs="{'invisible':[('move_type','not in', ('out_invoice', 'out_refund','in_invoice', 'in_refund'))]}"/>
                 <field name="tipo_documento" attrs="{'readonly':[('state','!=','draft')],'invisible':[('move_type','not in', ('out_invoice', 'out_refund','in_invoice', 'in_refund'))],'required':[('move_type','in', ('out_invoice', 'out_refund','in_invoice', 'in_refund'))]}"/>
                 <field name="payment_methods_id" attrs="{'readonly':[('state','!=','draft')],'invisible':[('move_type','not in', ('out_invoice', 'out_refund','in_invoice', 'in_refund'))],'required':[('move_type','in', ('out_invoice', 'out_refund','in_invoice', 'in_refund'))]}"/>
+                <!-- Sólo visible y requerido si el método = 99 -->
+                <field name="payment_method_otros"
+                placeholder="Ej.: Transferencia internacional, pago en especie, etc."
+                attrs="{'invisible':[('is_payment_method_99','=',False)],'required':[('is_payment_method_99','=',True)]}"/>
             </field>
 
             <xpath expr="//field[@name='invoice_line_ids']//tree//field[@name='name']" position="after">

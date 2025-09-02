@@ -525,6 +525,7 @@ class PosOrder(models.Model):
                     if line.discount and price_unit > 0:
                         total_descuento += descuento
                         dline["montoDescuento"] = descuento
+                        dline["codigoDescuento"] = '01'
                         dline["naturalezaDescuento"] = 'Descuento Comercial'
 
                     taxes = dict({})
