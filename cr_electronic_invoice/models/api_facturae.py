@@ -494,7 +494,7 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
             # Descuento (si aplica)
             if v.get('montoDescuento'):
                 sb.append('<Descuento>')
-                sb.append('<MontoDescuento>' + str(v['montoDescuento']) + '<MontoDescuento>')
+                sb.append('<MontoDescuento>' + str(v['montoDescuento']) + '</MontoDescuento>')
                 
                 cod_desc = str(v.get('codigoDescuento') or '99')      # usa el tuyo; '99' = Otros (si aplicara)
                 sb.append(f'<CodigoDescuento>{cod_desc}</CodigoDescuento>')
