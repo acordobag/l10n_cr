@@ -501,7 +501,7 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
                             
                 if v.get('naturalezaDescuento'):
                     sb.append('<NaturalezaDescuento>' + str(v['naturalezaDescuento']) + '</NaturalezaDescuento>')
-            sb.append('</Descuento>')
+                sb.append('</Descuento>')
             sb.append('<SubTotal>' + str(v['subtotal']) + '</SubTotal>')
 
             # === CAMBIO v4.4: estos dos van ANTES de <Impuesto> y a NIVEL DE LÍNEA ===
@@ -573,7 +573,7 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
             else:
                 sb.append('<ImpuestoAsumidoEmisorFabrica>0</ImpuestoAsumidoEmisorFabrica>')
             # ImpuestoNeto al final de los impuestos de la línea
-            # sb.append('<ImpuestoNeto>' + _fmt(v['impuestoNeto']) + '</ImpuestoNeto>')
+            sb.append('<ImpuestoNeto>' + _fmt(v['impuestoNeto']) + '</ImpuestoNeto>')
             sb.append('<MontoTotalLinea>' + _fmt(v['montoTotalLinea']) + '</MontoTotalLinea>')
             sb.append('</LineaDetalle>')
         sb.append('</DetalleServicio>')
