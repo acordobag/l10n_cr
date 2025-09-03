@@ -494,18 +494,14 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
             # Descuento (si aplica)
             if v.get('montoDescuento'):
                 sb.append('<Descuento>')
-                sb.append('<MontoDescuento>' + str(v['montoDescuento']) + '<MontoDescuento>')
-                
-                cod_desc = str(v.get('codigoDescuento') or '99')      # usa el tuyo; '99' = Otros (si aplicara)
-                sb.append(f'<CodigoDescuento>{cod_desc}</CodigoDescuento>')
-                
-                if v.get('naturalezaDescuento'):
-                    sb.append('<NaturalezaDescuento>' + str(v['naturalezaDescuento']) + '</NaturalezaDescuento>')
+                sb.append('<MontoDescuento>' + str(v['montoDescuento']) + '</MontoDescuento>')         
                 # (Opcional en 4.4) CódigoDescuento si lo manejas:
                 if v.get('codigoDescuento'):
                     sb.append('<CodigoDescuento>' + str(v['codigoDescuento']) + '</CodigoDescuento>')
+                            
+                if v.get('naturalezaDescuento'):
+                    sb.append('<NaturalezaDescuento>' + str(v['naturalezaDescuento']) + '</NaturalezaDescuento>')
                 sb.append('</Descuento>')
-
             sb.append('<SubTotal>' + str(v['subtotal']) + '</SubTotal>')
 
             # === CAMBIO v4.4: estos dos van ANTES de <Impuesto> y a NIVEL DE LÍNEA ===
