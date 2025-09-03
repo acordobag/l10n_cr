@@ -59,6 +59,7 @@
         'views/report_invoice_document.xml',
         'views/qr_code_invoice_view.xml',
         'views/account_portal_templates.xml',
+        'views/create_products_from_xml_wizard_views.xml',
         'security/ir.model.access.csv',
     ],
     'external_dependencies': {

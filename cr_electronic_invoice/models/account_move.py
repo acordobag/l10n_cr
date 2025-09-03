@@ -40,6 +40,10 @@ class InvoiceLineElectronic(models.Model):
                                            default=False)
     non_tax_deductible = fields.Boolean(string='Indicates if this invoice is non-tax deductible',)
 
+    # Store hints from the XML import so the wizard can propose values
+    xml_code = fields.Char(string='XML Code')     # CodigoComercial/Codigo or Codigo
+    xml_cabys = fields.Char(string='XML CABYS')
+
     @api.onchange('product_id')
     def product_changed(self):
         # Check if the product is non deductible to use a non_deductible tax
@@ -185,6 +189,27 @@ class AccountInvoiceElectronic(models.Model):
         compute='_compute_is_payment_method_99',
         store=False
     )
+
+    xml_missing_product_count = fields.Integer(
+        compute='_compute_missing_products', string='Missing products (XML)', store=False)
+    has_missing_products = fields.Boolean(
+        compute='_compute_missing_products', store=False)
+
+    @api.depends('invoice_line_ids.product_id', 'invoice_line_ids.display_type')
+    def _compute_missing_products(self):
+        for move in self:
+            cnt = len(move.invoice_line_ids.filtered(lambda l: not l.product_id and not l.display_type))
+            move.xml_missing_product_count = cnt
+            move.has_missing_products = bool(cnt)
+
+    def action_open_create_products_wizard(self):
+        self.ensure_one()
+        if not self.has_missing_products:
+            raise UserError(_("All lines already have a product."))
+        action = self.env.ref('cr_electronic_invoice.action_create_products_from_xml').read()[0]
+        action['context'] = {'default_move_id': self.id}
+        return action
+
 
     @api.depends('payment_methods_id.sequence')
     def _compute_is_payment_method_99(self):

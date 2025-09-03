@@ -1122,6 +1122,10 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
                         raise UserError(_(str('Tax code %s and percentage %s as non-tax ', (tax_code, tax_amount)) + 'deductible is not registered in the system'))
                     raise UserError(_(str('Tax code %s and percentage %s is not ' % (tax_code, tax_amount)) + 'registered in the system'))
 
+            code = line.xpath("inv:CodigoComercial/inv:Codigo", namespaces=namespaces) \
+                   or line.xpath("inv:Codigo", namespaces=namespaces)
+            cabys = line.xpath("inv:CodigoCABYS", namespaces=namespaces)
+
             _logger.debug('E-INV CR - impuestos de linea: %s', (taxes))
             columns = {'name': line.xpath("inv:Detalle", namespaces=namespaces)[0].text,
                        'move_id': invoice.id,
@@ -1135,7 +1139,10 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
                        'account_id': account_id.id,
                        'analytic_account_id': analytic_account,
                        'economic_activity_id': activity_id,
-                       'tax_ids': taxes}
+                       'tax_ids': taxes,
+                       'xml_code': code,
+                       'xml_cabys': cabys,
+                       }
             new_lines.append((0, 0, columns))
 
         invoice.invoice_line_ids = new_lines
