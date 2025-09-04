@@ -1113,9 +1113,11 @@ class AccountInvoiceElectronic(models.Model):
                     total_servicio_gravado = 0.0
                     total_servicio_exento = 0.0
                     total_servicio_exonerado = 0.0
+                    total_servicio_no_sujeto = 0.0
                     total_mercaderia_gravado = 0.0
                     total_mercaderia_exento = 0.0
                     total_mercaderia_exonerado = 0.0
+                    total_mercaderia_no_sujeta = 0.0
                     total_descuento = 0.0
                     total_impuestos = 0.0
                     base_subtotal = 0.0
@@ -1205,13 +1207,14 @@ class AccountInvoiceElectronic(models.Model):
                             if inv_line.discount and price_unit > 0:
                                 total_descuento += descuento
                                 line["montoDescuento"] = descuento
-                                line["codigoDescuento"] = '07'
+                                line["codigoDescuento"] = '01'
                                 line["naturalezaDescuento"] = inv_line.discount_note or 'Descuento Comercial'
 
                             # Se generan los impuestos
                             taxes = dict([])
                             _line_tax = 0.0
                             _tax_exoneration = False
+                            _tax_no_subject = False
                             _percentage_exoneration = 0
                             if inv_line.tax_ids:
                                 tax_index = 0
@@ -1230,6 +1233,8 @@ class AccountInvoiceElectronic(models.Model):
                                                               'exoneration_percentage': _tax_exoneration_rate,
                                                               'amount_exoneration': i.amount}
                                     else:
+                                        if i.iva_tax_code == '01':
+                                            _tax_no_subject = True
                                         taxes_lookup[i.id] = {'tax_code': i.tax_code,
                                                               'tarifa': i.amount,
                                                               'iva_tax_desc': i.iva_tax_desc,
@@ -1280,7 +1285,8 @@ class AccountInvoiceElectronic(models.Model):
                                         if _percentage_exoneration < 1:
                                             total_servicio_gravado += (base_line * (1 - _percentage_exoneration))
                                         total_servicio_exonerado += (base_line * _percentage_exoneration)
-
+                                    elif _tax_no_subject:
+                                        total_servicio_no_sujeto += base_line
                                     else:
                                         total_servicio_gravado += base_line
 
@@ -1294,6 +1300,8 @@ class AccountInvoiceElectronic(models.Model):
                                             total_mercaderia_gravado += (base_line * (1 - _percentage_exoneration))
                                         total_mercaderia_exonerado += (base_line * _percentage_exoneration)
 
+                                    elif _tax_no_subject:
+                                        total_mercaderia_no_sujeta += base_line
                                     else:
                                         total_mercaderia_gravado += base_line
 
@@ -1364,7 +1372,7 @@ class AccountInvoiceElectronic(models.Model):
                         total_impuestos, total_descuento, lines,
                         otros_cargos, currency_rate, invoice_comments,
                         tipo_documento_referencia, numero_documento_referencia,
-                        fecha_emision_referencia, codigo_referencia, razon_referencia)
+                        fecha_emision_referencia, codigo_referencia, razon_referencia, total_mercaderia_no_sujeta,total_servicio_no_sujeto)
 
                     xml_to_sign = str(xml_string_builder)
                     xml_firmado = api_facturae.sign_xml(
