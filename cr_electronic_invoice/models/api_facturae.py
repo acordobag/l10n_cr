@@ -439,7 +439,7 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
                     sb.append('<Canton>' + str(receiver_company.county_id.code or '') + '</Canton>')
                     sb.append('<Distrito>' + str(receiver_company.district_id.code or '') + '</Distrito>')
                     if receiver_company.neighborhood_id and receiver_company.neighborhood_id.code:
-                        sb.append('<Barrio>' + str(receiver_company.neighborhood_id.code or '00') + '</Barrio>')
+                        sb.append('<Barrio>' + str(receiver_company.neighborhood_id.name or 'Otro barrio') + '</Barrio>')
                     sb.append('<OtrasSenas>' + escape(str(receiver_company.street or 'NA')) + '</OtrasSenas>')
                     sb.append('</Ubicacion>')
 
