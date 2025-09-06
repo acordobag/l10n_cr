@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Códigos de descuento FE v4.4 -->
+    <record id="fe_discount_code_01" model="fe.discount.code">
+        <field name="code">01</field>
+        <field name="name">Descuento por Regalía</field>
+        <field name="default_percentage">100</field>
+    </record>
+
+    <record id="fe_discount_code_02" model="fe.discount.code">
+        <field name="code">02</field>
+        <field name="name">Descuento por Regalía (IVA cobrado al cliente)</field>
+        <field name="default_percentage">100</field>
+    </record>
+
+    <record id="fe_discount_code_03" model="fe.discount.code">
+        <field name="code">03</field>
+        <field name="name">Descuento por Bonificación</field>
+        <field name="default_percentage">0</field>
+    </record>
+
+    <record id="fe_discount_code_04" model="fe.discount.code">
+        <field name="code">04</field>
+        <field name="name">Descuento por volumen</field>
+        <field name="default_percentage">0</field>
+    </record>
+
+    <record id="fe_discount_code_05" model="fe.discount.code">
+        <field name="code">05</field>
+        <field name="name">Descuento por Temporada (estacional)</field>
+        <field name="default_percentage">0</field>
+    </record>
+
+    <record id="fe_discount_code_06" model="fe.discount.code">
+        <field name="code">06</field>
+        <field name="name">Descuento promocional</field>
+        <field name="default_percentage">0</field>
+    </record>
+
+    <record id="fe_discount_code_07" model="fe.discount.code">
+        <field name="code">07</field>
+        <field name="name">Descuento Comercial</field>
+        <field name="default_percentage">0</field>
+    </record>
+
+    <record id="fe_discount_code_08" model="fe.discount.code">
+        <field name="code">08</field>
+        <field name="name">Descuento por frecuencia</field>
+        <field name="default_percentage">0</field>
+    </record>
+
+    <record id="fe_discount_code_09" model="fe.discount.code">
+        <field name="code">09</field>
+        <field name="name">Descuento sostenido</field>
+        <field name="default_percentage">0</field>
+    </record>
+
+    <record id="fe_discount_code_99" model="fe.discount.code">
+        <field name="code">99</field>
+        <field name="name">Otros descuentos</field>
+        <field name="default_percentage">0</field>
+    </record>
+
+</odoo>

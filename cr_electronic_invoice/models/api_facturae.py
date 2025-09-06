@@ -313,7 +313,8 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
                 total_impuestos, total_descuento, lines,
                 otrosCargos, currency_rate, invoice_comments,
                 tipo_documento_referencia, numero_documento_referencia,
-                fecha_emision_referencia, codigo_referencia, razon_referencia, total_mercaderia_no_sujeta = 0, total_servicio_no_sujeto = 0):
+                fecha_emision_referencia, codigo_referencia, razon_referencia,
+                total_mercaderia_no_sujeta = 0,total_servicio_no_sujeto = 0, total_impuestos_asumidos = 0):
 
     numero_linea = 0
 
@@ -516,7 +517,7 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
                     v.get('montoDescuento', 0.0))
             sb.append('<BaseImponible>' + _fmt(base_imponible_linea) + '</BaseImponible>')
             # === FIN CAMBIO ===
-
+            valor_asumido = v.get('impuesto_asumido_fab')
             # Impuesto por línea (0..n)
             if v.get('impuesto'):
                 for (a, b) in v['impuesto'].items():
@@ -565,13 +566,13 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
                     else:
                         code_key = str(b.get('codigo_impuesto_otro') or '')
                     k = (codigo, code_key)
-                    desglose_impuesto[k] = float(desglose_impuesto.get(k, 0.0)) + float(b.get('monto') or 0.0)
+                    if valor_asumido is None:
+                        desglose_impuesto[k] = float(desglose_impuesto.get(k, 0.0)) + float(b.get('monto') or 0.0)
 
-            valor_asumido = v.get('impuesto_asumido_emisor_fabrica')
             if valor_asumido is not None:
                 sb.append('<ImpuestoAsumidoEmisorFabrica>' + _fmt(valor_asumido) + '</ImpuestoAsumidoEmisorFabrica>')
             else:
-                sb.append('<ImpuestoAsumidoEmisorFabrica>0</ImpuestoAsumidoEmisorFabrica>')
+                sb.append('<ImpuestoAsumidoEmisorFabrica>0.0</ImpuestoAsumidoEmisorFabrica>')
             # ImpuestoNeto al final de los impuestos de la línea
             sb.append('<ImpuestoNeto>' + _fmt(v['impuestoNeto']) + '</ImpuestoNeto>')
             sb.append('<MontoTotalLinea>' + _fmt(v['montoTotalLinea']) + '</MontoTotalLinea>')
@@ -632,6 +633,7 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
             sb.append('<TotalMontoImpuesto>' + _fmt(monto) + '</TotalMontoImpuesto>')
             sb.append('</TotalDesgloseImpuesto>')
     sb.append('<TotalImpuesto>' + str(round(total_impuestos, 5)) + '</TotalImpuesto>')
+    sb.append('<TotalImpAsumEmisorFabrica>' + str(round(total_impuestos_asumidos, 5)) + '</TotalImpAsumEmisorFabrica>')
     if total_iva_devuelto:
         sb.append('<TotalIVADevuelto>' + str(round(total_iva_devuelto, 5)) + '</TotalIVADevuelto>')
     sb.append('<TotalOtrosCargos>' + str(totalOtrosCargos) + '</TotalOtrosCargos>')
