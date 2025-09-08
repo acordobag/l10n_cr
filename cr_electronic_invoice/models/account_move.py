@@ -43,6 +43,42 @@ class InvoiceLineElectronic(models.Model):
     # Store hints from the XML import so the wizard can propose values
     xml_code = fields.Char(string='XML Code')     # CodigoComercial/Codigo or Codigo
     xml_cabys = fields.Char(string='XML CABYS')
+    fe_discount_code_id  = fields.Many2one(
+        'fe.discount.code',
+        string='Cód. Descuento',
+        help="Código de descuento según FE v4.4 (01–09, 99).",
+        copy = True,
+        index = True,
+    )
+
+    # def write(self, vals):
+    #
+    #     for line in self:
+    #         rec = line._code_record_for_discount(line.discount)
+    #         vals['fe_discount_code_id'] = rec.id
+    #         vals['fe_discount_code_id'] = rec.id
+    #     res = super().write(vals)
+    #     return res
+
+    def _get_fe_discount_code(self, code_str):
+        """Return the fe.discount.code record for the given 2-digit code."""
+        return self.env['fe.discount.code'].search([('code', '=', str(code_str).zfill(2))], limit=1)
+
+    def _code_record_for_discount(self, discount):
+        """Map a discount % to the fe.discount.code record or False."""
+        d = float(discount or 0.0)
+        if d <= 0.0:
+            return False
+        code = '01' if abs(d - 100.0) < 1e-6 else '07'
+        return self.env['fe.discount.code'].search([('code', '=', code)], limit=1)
+
+    @api.onchange('discount')
+    def _onchange_fe_discount_code_reset(self):
+        """If discount is 0, clear the discount code (rule in v4.4)."""
+        if not self.discount or float(self.discount) == 0.0:
+            self.fe_discount_code_id = False
+        elif float(self.discount) > 0:
+            self.fe_discount_code_id = self._code_record_for_discount(self.discount)
 
     @api.onchange('product_id')
     def product_changed(self):
@@ -1138,16 +1174,20 @@ class AccountInvoiceElectronic(models.Model):
                     total_servicio_gravado = 0.0
                     total_servicio_exento = 0.0
                     total_servicio_exonerado = 0.0
+                    total_servicio_no_sujeto = 0.0
                     total_mercaderia_gravado = 0.0
                     total_mercaderia_exento = 0.0
                     total_mercaderia_exonerado = 0.0
+                    total_mercaderia_no_sujeta = 0.0
                     total_descuento = 0.0
                     total_impuestos = 0.0
+                    total_impuestos_asumidos = 0.0
                     base_subtotal = 0.0
                     _old_rate_exoneration = False
                     _no_cabys_code = False
 
                     for inv_line in inv.invoice_line_ids:
+                        _tax_from_factory = False
                         if inv_line.display_type:  # skip sections and notes
                             continue
 
@@ -1173,6 +1213,8 @@ class AccountInvoiceElectronic(models.Model):
                             total_otros_cargos += inv_line.price_total
 
                         else:
+                            if inv_line.fe_discount_code_id.code == '01':
+                                _tax_from_factory = True
                             line_number += 1
                             price = inv_line.price_unit
                             quantity = inv_line.quantity
@@ -1230,13 +1272,14 @@ class AccountInvoiceElectronic(models.Model):
                             if inv_line.discount and price_unit > 0:
                                 total_descuento += descuento
                                 line["montoDescuento"] = descuento
-                                line["codigoDescuento"] = '01'
-                                line["naturalezaDescuento"] = inv_line.discount_note or 'Descuento Comercial'
+                                line["codigoDescuento"] = inv_line.fe_discount_code_id.code or '07'
+                                line["naturalezaDescuento"] = inv_line.fe_discount_code_id.name or 'Descuento Comercial'
 
                             # Se generan los impuestos
                             taxes = dict([])
                             _line_tax = 0.0
                             _tax_exoneration = False
+                            _tax_no_subject = False
                             _percentage_exoneration = 0
                             if inv_line.tax_ids:
                                 tax_index = 0
@@ -1255,6 +1298,9 @@ class AccountInvoiceElectronic(models.Model):
                                                               'exoneration_percentage': _tax_exoneration_rate,
                                                               'amount_exoneration': i.amount}
                                     else:
+
+                                        if i.iva_tax_code == '01':
+                                            _tax_no_subject = True
                                         taxes_lookup[i.id] = {'tax_code': i.tax_code,
                                                               'tarifa': i.amount,
                                                               'iva_tax_desc': i.iva_tax_desc,
@@ -1267,7 +1313,8 @@ class AccountInvoiceElectronic(models.Model):
 
                                     elif taxes_lookup[i['id']]['tax_code'] != '00':
                                         tax_index += 1
-                                        tax_amount = round(subtotal_line * taxes_lookup[i['id']]['tarifa'] / 100, 5)
+                                        _subtotal = base_line if _tax_from_factory else subtotal_line
+                                        tax_amount = round(_subtotal * taxes_lookup[i['id']]['tarifa'] / 100, 5)
                                         _line_tax += tax_amount
                                         tax = {
                                             'codigo': taxes_lookup[i['id']]['tax_code'],
@@ -1288,11 +1335,16 @@ class AccountInvoiceElectronic(models.Model):
                                                 "montoImpuesto": _tax_amount_exoneration,
                                                 "porcentajeCompra": int(exoneration_percentage)
                                             }
+                                        if _tax_from_factory:
+                                            _impuesto_asumido_fab = round(base_line * taxes_lookup[i['id']]['tarifa'] / 100, 5)
+                                            line["impuesto_asumido_fab"] = _impuesto_asumido_fab
+                                            total_impuestos_asumidos += _impuesto_asumido_fab
+                                            _line_tax -= _impuesto_asumido_fab
 
                                         taxes[tax_index] = tax
 
                                 line["impuesto"] = taxes
-                                line["impuestoNeto"] = round(_line_tax, 5)
+                                line["impuestoNeto"] = 0 if _tax_from_factory else round(_line_tax, 5)
 
                             # Si no hay product_uom_id se asume como Servicio
                             if not inv_line.product_uom_id or \
@@ -1305,7 +1357,8 @@ class AccountInvoiceElectronic(models.Model):
                                         if _percentage_exoneration < 1:
                                             total_servicio_gravado += (base_line * (1 - _percentage_exoneration))
                                         total_servicio_exonerado += (base_line * _percentage_exoneration)
-
+                                    elif _tax_no_subject:
+                                        total_servicio_no_sujeto += base_line
                                     else:
                                         total_servicio_gravado += base_line
 
@@ -1319,6 +1372,8 @@ class AccountInvoiceElectronic(models.Model):
                                             total_mercaderia_gravado += (base_line * (1 - _percentage_exoneration))
                                         total_mercaderia_exonerado += (base_line * _percentage_exoneration)
 
+                                    elif _tax_no_subject:
+                                        total_mercaderia_no_sujeta += base_line
                                     else:
                                         total_mercaderia_gravado += base_line
 
@@ -1358,7 +1413,7 @@ class AccountInvoiceElectronic(models.Model):
                                                 'is in base 100 and must be base 13.'))
                         continue
 
-                    if abs(base_subtotal + total_impuestos +
+                    if abs(base_subtotal + (total_impuestos) +
                            total_otros_cargos - total_iva_devuelto - inv.amount_total) > 0.5:
                         inv.state_tributacion = 'error'
                         inv.message_post(
@@ -1380,6 +1435,7 @@ class AccountInvoiceElectronic(models.Model):
                     base_subtotal = round(base_subtotal, 5)
                     total_impuestos = round(total_impuestos, 5)
                     total_descuento = round(total_descuento, 5)
+                    total_impuestos_asumidos = round(total_impuestos_asumidos, 5)
                     # ESTE METODO GENERA EL XML DIRECTAMENTE DESDE PYTHON
                     xml_string_builder = api_facturae.gen_xml_v44(
                         inv, sale_conditions, total_servicio_gravado,
@@ -1389,7 +1445,7 @@ class AccountInvoiceElectronic(models.Model):
                         total_impuestos, total_descuento, lines,
                         otros_cargos, currency_rate, invoice_comments,
                         tipo_documento_referencia, numero_documento_referencia,
-                        fecha_emision_referencia, codigo_referencia, razon_referencia)
+                        fecha_emision_referencia, codigo_referencia, razon_referencia, total_mercaderia_no_sujeta,total_servicio_no_sujeto, total_impuestos_asumidos)
 
                     xml_to_sign = str(xml_string_builder)
                     xml_firmado = api_facturae.sign_xml(

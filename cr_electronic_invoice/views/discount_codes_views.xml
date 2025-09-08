@@ -1,0 +1,13 @@
+<odoo>
+  <record id="action_fe_discount_code" model="ir.actions.act_window">
+    <field name="name">Códigos de Descuento FE</field>
+    <field name="res_model">fe.discount.code</field>
+    <field name="view_mode">tree,form</field>
+    <field name="groups_id" eval="[(4, ref('cr_electronic_invoice.group_fe_discount_manager'))]"/>
+  </record>
+
+  <menuitem id="menu_fe_discount_code"
+            parent="account.menu_finance_configuration"
+            action="action_fe_discount_code"
+            groups="cr_electronic_invoice.group_fe_discount_manager"/>
+</odoo>

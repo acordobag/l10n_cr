@@ -67,8 +67,15 @@
             </xpath>
 
             <xpath expr="//field[@name='invoice_line_ids']//tree//field[@name='discount']" position="after">
-                <field name="discount_note"/>
+                <field name="fe_discount_code_id" context="{'create': 0}" attrs="{'required':[('discount', '>', 0)]}"/>
+                <field name="discount_note" />
                 <field name="tariff_head"/>
+            </xpath>
+
+            <xpath expr="//field[@name='line_ids']//tree//field[@name='discount']" position="after">
+                <field invisible="1" name="fe_discount_code_id" context="{'create': 0}" attrs="{'required':[('discount', '>', 0)]}"/>
+                <field invisible="1" name="discount_note" />
+                <field invisible="1" name="tariff_head"/>
             </xpath>
 
             <xpath expr="//button[@name='action_invoice_sent']" position="attributes">

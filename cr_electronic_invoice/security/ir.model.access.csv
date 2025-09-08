@@ -11,3 +11,5 @@ access_economic_activity,economic.activity,model_economic_activity,account.group
 access_invoice_qr_fields,access.invoice.qr.fields,model_invoice_qr_fields,,1,1,1,1
 access_create_products_from_xml_wizard,access_create_products_from_xml_wizard,model_create_products_from_xml_wizard,base.group_user,1,1,1,1
 access_create_products_from_xml_wizard_line,access_create_products_from_xml_wizard_line,model_create_products_from_xml_wizard_line,base.group_user,1,1,1,1
+access_fe_discount_code_user,fe_discount_code_user,model_fe_discount_code,base.group_user,1,0,0,0
+
