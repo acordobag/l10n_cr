@@ -66,7 +66,7 @@ class InvoiceLineElectronic(models.Model):
         d = float(discount or 0.0)
         if d <= 0.0:
             return False
-        code = '01' if abs(d - 100.0) < 1e-6 else '07'
+        code = '04' if abs(d - 100.0) < 1e-6 else '07'
         return self.env['fe.discount.code'].search([('code', '=', code)], limit=1)
 
     @api.onchange('discount')
@@ -233,25 +233,27 @@ class AccountInvoiceElectronic(models.Model):
     def _onchange_payment_methods_id_clear_otros(self):
         # si deja de ser 99, limpiamos el texto
         for move in self:
+            if (move.move_type == 'in_invoice'):
+                move.payment_method_otros = 'Otros'
+                return
             if not move.is_payment_method_99:
                 move.payment_method_otros = False
 
     @api.constrains('payment_methods_id', 'payment_method_otros')
     def _check_medio_pago_99(self):
         for move in self:
+            if (move.move_type == 'in_invoice'): return
             code = str(move.payment_methods_id.sequence or '')
             if code == '99':
                 if not (move.payment_method_otros or '').strip():
-                    raise ValidationError(
+                    raise UserError(
                         _("Cuando el tipo de medio de pago es '99 - OTRO', debe indicar el campo "
                           "'Medio de pago (otros)'.")
                     )
                 if len(move.payment_method_otros) > 100:
-                    raise ValidationError(
+                    raise UserError(
                         _("El texto de 'Medio de pago (otros)' supera los 100 caracteres permitidos por el XSD 4.4.")
                     )
-    
-    
 
     def _compute_amount_total(self):
         for rec in self:

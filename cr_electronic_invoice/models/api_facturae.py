@@ -1076,7 +1076,7 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
                     discount_amount_node = discount_node[0].xpath("inv:MontoDescuento", namespaces=namespaces)[0]
                     discount_amount = float(discount_amount_node.text or '0.0')
                     discount_percentage = discount_amount / total_amount * 100
-                    discount_note = discount_node[0].xpath("inv:NaturalezaDescuento", namespaces=namespaces)[0].text
+                    discount_note = (discount_node and discount_node[0].xpath('string(inv:NaturalezaDescuento)', namespaces=namespaces).strip()) or None
                 else:
                     discount_amount_node = line.xpath("inv:MontoDescuento", namespaces=namespaces)
                     if discount_amount_node:
