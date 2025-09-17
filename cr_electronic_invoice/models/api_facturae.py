@@ -660,7 +660,7 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
     # Información de referencia
     if tipo_documento_referencia and numero_documento_referencia and fecha_emision_referencia:
         sb.append('<InformacionReferencia>')
-        sb.append('<'+nameTipoDoc+'>' + str(tipo_documento_referencia) + '<'+nameTipoDoc+'>')
+        sb.append('<'+nameTipoDoc+'>' + str(tipo_documento_referencia) + '</'+nameTipoDoc+'>')
         sb.append('<Numero>' + str(numero_documento_referencia) + '</Numero>')
         sb.append('<'+nameFechaEmision+'>' + fecha_emision_referencia + '</'+nameFechaEmision+'>')
         sb.append('<Codigo>' + str(codigo_referencia) + '</Codigo>')
