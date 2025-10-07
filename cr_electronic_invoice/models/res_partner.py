@@ -107,20 +107,22 @@ class PartnerElectronic(models.Model):
                 a_codes = list([])
                 for activity in activities:
                     if activity["estado"] == "A":
-                        a_codes.append(activity["codigo"])
+                        try:
+                            a_codes.append(str(int(float(activity['ciiu3'][0]["codigo"]))))
+                        except ValueError:
+                            a_codes.append(activity["codigo"])
                 economic_activities = self.env['economic.activity'].with_context(active_test=False).search([('code',
                                                                                                              'in',
                                                                                                              a_codes)])
-
                 self.economic_activities_ids = economic_activities
                 self.name = json_response["name"]
 
-                if len(a_codes) >= 1:
-                    self.activity_id = self.economic_activities_ids[0].id
+            if len(a_codes) >= 1:
+                    self.activity_id = economic_activities[:1].id
             else:
                 alert = {
                     'title': json_response["status"],
-                    'message': json_response["text"]
+                    'message': json_response["name"]
                 }
                 return {'value': {'vat': ''}, 'warning': alert}
         else:
