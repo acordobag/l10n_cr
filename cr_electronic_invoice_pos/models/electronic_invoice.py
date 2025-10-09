@@ -458,7 +458,7 @@ class PosOrder(models.Model):
                         doc.tipo_documento = 'NC'
                         numero_documento_referencia = doc.pos_order_id.number_electronic
                         razon_referencia = 'nota credito'
-
+                    if(not doc.pos_order_id.number_electronic): continue
                     tipo_documento_referencia = doc.pos_order_id.number_electronic[29:31]
                     numero_documento_referencia = doc.pos_order_id.number_electronic
                     fecha_emision_referencia = doc.pos_order_id.date_issuance
