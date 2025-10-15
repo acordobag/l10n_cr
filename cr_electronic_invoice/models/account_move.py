@@ -1325,7 +1325,7 @@ class AccountInvoiceElectronic(models.Model):
                                 line["impuestoNeto"] = 0 if _tax_from_factory else round(_line_tax, 5)
 
                             # Si no hay product_uom_id se asume como Servicio
-                            if not inv_line.product_uom_id or \
+                            if inv_line.product_id.type == 'service' or \
                                 inv_line.product_uom_id.category_id.name in ('Service',
                                                                              'Services',
                                                                              'Servicio',
