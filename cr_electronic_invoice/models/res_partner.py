@@ -107,10 +107,10 @@ class PartnerElectronic(models.Model):
                 a_codes = list([])
                 for activity in activities:
                     if activity["estado"] == "A":
-                        try:
-                            a_codes.append(str(int(float(activity['ciiu3'][0]["codigo"]))))
-                        except ValueError:
-                            a_codes.append(activity["codigo"])
+                        # try:
+                        #     a_codes.append(str(int(float(activity['ciiu3'][0]["codigo"]))))
+                        # except ValueError:
+                        a_codes.append(activity["codigo"])
                 economic_activities = self.env['economic.activity'].with_context(active_test=False).search([('code',
                                                                                                              'in',
                                                                                                              a_codes)])
