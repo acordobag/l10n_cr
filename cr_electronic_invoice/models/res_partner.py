@@ -113,7 +113,7 @@ class PartnerElectronic(models.Model):
                         a_codes.append(activity["codigo"])
                 economic_activities = self.env['economic.activity'].with_context(active_test=False).search([('code',
                                                                                                              'in',
-                                                                                                             a_codes)])
+                                                                                                             a_codes), ('active','=','True')])
                 self.economic_activities_ids = economic_activities
                 self.name = json_response["name"]
 
