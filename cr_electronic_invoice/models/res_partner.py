@@ -98,39 +98,76 @@ class PartnerElectronic(models.Model):
         self.action_get_economic_activities()
 
     def action_get_economic_activities(self):
-        if self.vat:
-            json_response = api_facturae.get_economic_activities(self)
-            _logger.debug('E-INV CR  - Economic Activities: %s', json_response)
-            if json_response["status"] == 200:
-                activities = json_response["activities"]
-                # Activity Codes
-                a_codes = list([])
-                for activity in activities:
-                    if activity["estado"] == "A":
-                        # try:
-                        #     a_codes.append(str(int(float(activity['ciiu3'][0]["codigo"]))))
-                        # except ValueError:
-                        a_codes.append(activity["codigo"])
-                economic_activities = self.env['economic.activity'].with_context(active_test=False).search([('code',
-                                                                                                             'in',
-                                                                                                             a_codes), ('active','=','True')])
-                self.economic_activities_ids = economic_activities
-                self.name = json_response["name"]
-
-            if len(a_codes) >= 1:
-                    self.activity_id = economic_activities[:1].id
-            else:
-                alert = {
-                    'title': json_response["status"],
-                    'message': json_response["name"]
-                }
-                return {'value': {'vat': ''}, 'warning': alert}
-        else:
-            alert = {
-                'title': 'Atención',
-                'message': _('Company VAT is invalid')
+        if not self.vat:
+            return {
+                'value': {'vat': ''},
+                'warning': {'title': 'Atención', 'message': _('Company VAT is invalid')}
             }
+
+        json_response = api_facturae.get_economic_activities(self)
+        _logger.debug('E-INV CR - Economic Activities: %s', json_response)
+
+        if not json_response or json_response.get("status") != 200:
+            alert = {'title': json_response.get("status"), 'message': json_response.get("name")}
             return {'value': {'vat': ''}, 'warning': alert}
+
+        activities = json_response.get("activities", []) or []
+
+        EconomicActivity = self.env['economic.activity'].with_context(active_test=False)
+
+        def _norm_code(v):
+            # preserva decimales (e.g. "6202.0")
+            return (str(v) if v is not None else '').strip()
+
+        def _norm_ciiu3(v):
+            s = (str(v) if v is not None else '').strip()
+            return s.zfill(6) if s.isdigit() and len(s) < 6 else s
+
+        # acumulamos en un recordset (union con |=)
+        economic_activities = EconomicActivity.browse()
+        pair_count = 0
+
+        for item in activities:
+            if item.get("estado") != "A":
+                continue
+
+            code = _norm_code(item.get("codigo"))  # CIIU4 con decimal
+            c3_list = item.get("ciiu3") or []
+            if not isinstance(c3_list, list):
+                c3_list = [c3_list]
+
+            found_any = False
+            for c3_entry in c3_list:
+                c3 = c3_entry.get("codigo") if isinstance(c3_entry, dict) else c3_entry
+                c3 = _norm_ciiu3(c3)
+                if not code or not c3:
+                    continue
+                rec = EconomicActivity.search([('code', '=', code), ('ciiu3', '=', c3)], limit=1)
+                if rec:
+                    economic_activities |= rec
+                    pair_count += 1
+                    found_any = True
+
+            # si Hacienda no trae ciiu3, hacemos fallback solo por code
+            if not found_any and code:
+                rec = EconomicActivity.search([('code', '=', code)], limit=1)
+                if rec:
+                    economic_activities |= rec
+
+        # Escribimos el M2M correctamente
+        self.economic_activities_ids = [(6, 0, economic_activities.ids)]
+
+        # Nombre del contribuyente devuelto por Hacienda
+        if json_response.get("name"):
+            self.name = json_response["name"]
+
+        # Settear activity_id con el primero, si existe
+        if economic_activities:
+            self.activity_id = economic_activities[:1].id  # recordset slice ok
+        else:
+            # sin resultados: warning opcional
+            _logger.info("E-INV CR - No se encontraron actividades económicas activas en la base local para %s",
+                         self.vat)
 
     @api.onchange('exoneration_number')
     def _onchange_exoneration_number(self):

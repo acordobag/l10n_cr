@@ -9,8 +9,11 @@ class EconomicActivity(models.Model):
 
     active = fields.Boolean(default=True)
     code = fields.Char()
+    ciiu3 = fields.Char()
     name = fields.Char()
+    name_ciiu3 = fields.Char()
     description = fields.Char()
+    description_ciiu3 = fields.Char()
 
     sale_type = fields.Selection(selection=[('goods', 'Goods'), ('services', 'Services')],
                                  default='goods',
