@@ -1535,7 +1535,7 @@ class AccountInvoiceElectronic(models.Model):
                 inv.tipo_documento = 'disabled'
                 continue
 
-            self._onchange_partner_id(validate_payment=False)
+            # self._onchange_partner_id(validate_payment=False)
 
             if inv.partner_id.has_exoneration:
                 if inv.partner_id.date_expiration and (inv.partner_id.date_expiration > datetime.date.today()):
