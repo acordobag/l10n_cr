@@ -15,7 +15,7 @@ import phonenumbers
 import random
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-
+from decimal import Decimal, ROUND_HALF_UP
 from odoo import _
 from odoo.exceptions import UserError
 from xml.sax.saxutils import escape
@@ -304,6 +304,143 @@ def gen_xml_mr_43(clave, cedula_emisor, fecha_emision, id_mensaje,
     sb.append('<NumeroConsecutivoReceptor>' + mr_consecutivo_receptor + '</NumeroConsecutivoReceptor>')
     sb.append('</MensajeReceptor>')
     return str(sb)
+
+
+def _q5(value) -> str:
+    """Redondeo a 5 decimales con HALF_UP, conforme al XSD (fractionDigits=5)."""
+    return str(Decimal(str(value)).quantize(Decimal('0.00000'), rounding=ROUND_HALF_UP))
+
+def _clave_extract_cedula_12(clave: str) -> str:
+    """
+    Extrae los 12 dígitos de cédula embebidos en la Clave (posiciones 10..21, 1-based).
+    Clave = 3 (pais) + 6 (fecha) + 12 (cedula) + 20 (consecutivo) + 8 (situación) + 1 (seguridad) = 50.
+    """
+    m = re.match(r'^(\d{3})(\d{6})(\d{12})', clave or '')
+    return m.group(3) if m else None
+
+def _ensure_datetime_iso8601(dt_str: str) -> str:
+    """
+    Valida mínimamente que venga tipo 'YYYY-MM-DDThh:mm:ss±hh:mm'.
+    Si usas objetos datetime, formatear con .isoformat().
+    """
+    if not isinstance(dt_str, str) or 'T' not in dt_str:
+        raise UserError(_('FechaEmisionDoc debe ser xs:dateTime ISO-8601, ej: 2025-11-06T21:13:00-06:00'))
+    return dt_str
+
+def gen_xml_mr_44(clave, cedula_emisor, fecha_emision_iso8601, id_mensaje,
+                  detalle_mensaje, cedula_receptor,
+                  consecutivo_receptor,
+                  monto_impuesto=None, total_factura=None,
+                  codigo_actividad=None,
+                  condicion_impuesto=None,
+                  monto_total_impuesto_acreditar=None,
+                  monto_total_gasto_aplicable=None):
+    """
+    Genera XML de Mensaje Receptor v4.4 (SIN firma).
+    NOTA: El XSD exige <ds:Signature>, pero aquí NO se incluye ni valida.
+          Agrega la firma en tu función externa y luego inserta <ds:Signature> antes de enviar/validar.
+    """
+
+    # --- Validaciones base ---
+    mr_clave = re.sub(r'[^0-9]', '', str(clave or ''))
+    if len(mr_clave) != 50:
+        raise UserError(_('La clave a utilizar es inválida. Debe contener 50 dígitos.'))
+
+    # Cedulas: XSD permite 9..12 dígitos; para comparar con la clave, zfill(12)
+    _ced_emisor_raw = re.sub(r'[^0-9]', '', str(cedula_emisor or ''))
+    if not (9 <= len(_ced_emisor_raw) <= 12):
+        raise UserError(_('NumeroCedulaEmisor inválido: Debe contener entre 9 y 12 dígitos.'))
+    mr_cedula_emisor = _ced_emisor_raw
+    mr_cedula_emisor_12 = _ced_emisor_raw.zfill(12)
+
+    _ced_receptor_raw = re.sub(r'[^0-9]', '', str(cedula_receptor or ''))
+    if not (9 <= len(_ced_receptor_raw) <= 12):
+        raise UserError(_('NumeroCedulaReceptor inválido: Debe contener entre 9 y 12 dígitos.'))
+    mr_cedula_receptor = _ced_receptor_raw
+
+    mr_consecutivo_receptor = re.sub(r'[^0-9]', '', str(consecutivo_receptor or ''))
+    if len(mr_consecutivo_receptor) != 20:
+        raise UserError(_('NumeroConsecutivoReceptor inválido: Debe contener exactamente 20 dígitos.'))
+
+    fecha_emision_iso8601 = _ensure_datetime_iso8601(fecha_emision_iso8601)
+
+    try:
+        mr_mensaje_id = int(id_mensaje)
+    except Exception:
+        raise UserError(_('El ID del mensaje receptor es inválido.'))
+    if mr_mensaje_id < 1 or mr_mensaje_id > 3:
+        raise UserError(_('El ID del mensaje receptor debe ser 1, 2 o 3.'))
+
+    # Comparar cédula embebida en Clave (evita error -8)
+    cedula_en_clave = _clave_extract_cedula_12(mr_clave)
+    if not cedula_en_clave or cedula_en_clave != mr_cedula_emisor_12:
+        raise UserError(_('La cédula del emisor en el MR no coincide con la cédula embebida en la Clave.'))
+
+    # Montos (XSD permite 5 decimales). TotalFactura es obligatorio.
+    if total_factura is None:
+        raise UserError(_('TotalFactura es obligatorio.'))
+    total_factura_q = _q5(total_factura)
+
+    monto_impuesto_q = None
+    if monto_impuesto is not None and Decimal(str(monto_impuesto)) > 0:
+        monto_impuesto_q = _q5(monto_impuesto)
+
+    mti_acred_q = _q5(monto_total_impuesto_acreditar) if monto_total_impuesto_acreditar not in (None, '') else None
+    mt_gasto_q  = _q5(monto_total_gasto_aplicable)    if monto_total_gasto_aplicable    not in (None, '') else None
+
+    # DetalleMensaje (opcional, máx 160 chars)
+    detalle_xml = None
+    if detalle_mensaje:
+        dm = str(detalle_mensaje).replace('\r\n', '\n').replace('\r', '\n')
+        dm = escape(dm).replace('\n', '&#13;')  # Hacienda suele representar saltos como &#13;
+        if len(dm) > 160:
+            dm = dm[:160]
+        detalle_xml = dm
+
+    # CondicionImpuesto: si se envía, debe ser 01..05
+    if condicion_impuesto is not None and condicion_impuesto not in ('01', '02', '03', '04', '05'):
+        raise UserError(_('CondicionImpuesto inválida. Valores permitidos: 01, 02, 03, 04, 05.'))
+
+    # --- Construcción XML (SIN firma) ---
+    parts = []
+    parts.append('<MensajeReceptor xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ')
+    parts.append('xmlns="https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor" ')
+    # Nota: no declaramos xmlns:ds aquí porque no incluimos la firma todavía.
+    parts.append('xsi:schemaLocation="https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor ')
+    parts.append('https://www.hacienda.go.cr/ATV/ComprobanteElectronico/docs/esquemas/2016/v4.4/MensajeReceptor_V4.4.xsd">')
+
+    parts.append(f'<Clave>{mr_clave}</Clave>')
+    parts.append(f'<NumeroCedulaEmisor>{mr_cedula_emisor}</NumeroCedulaEmisor>')
+    parts.append(f'<FechaEmisionDoc>{fecha_emision_iso8601}</FechaEmisionDoc>')
+    parts.append(f'<Mensaje>{mr_mensaje_id}</Mensaje>')
+
+    if detalle_xml is not None:
+        parts.append(f'<DetalleMensaje>{detalle_xml}</DetalleMensaje>')
+
+    if monto_impuesto_q is not None:
+        parts.append(f'<MontoTotalImpuesto>{monto_impuesto_q}</MontoTotalImpuesto>')
+
+    if codigo_actividad:
+        codigo_str = str(codigo_actividad).strip()
+        if len(codigo_str) > 6:
+            raise UserError(_('CodigoActividad supera 6 caracteres.'))
+        parts.append(f'<CodigoActividad>{codigo_str}</CodigoActividad>')
+
+    if condicion_impuesto is not None:
+        parts.append(f'<CondicionImpuesto>{condicion_impuesto}</CondicionImpuesto>')
+
+    if mti_acred_q is not None:
+        parts.append(f'<MontoTotalImpuestoAcreditar>{mti_acred_q}</MontoTotalImpuestoAcreditar>')
+
+    if mt_gasto_q is not None:
+        parts.append(f'<MontoTotalDeGastoAplicable>{mt_gasto_q}</MontoTotalDeGastoAplicable>')
+
+    parts.append(f'<TotalFactura>{total_factura_q}</TotalFactura>')
+    parts.append(f'<NumeroCedulaReceptor>{mr_cedula_receptor}</NumeroCedulaReceptor>')
+    parts.append(f'<NumeroConsecutivoReceptor>{mr_consecutivo_receptor}</NumeroConsecutivoReceptor>')
+    parts.append('</MensajeReceptor>')
+
+    return ''.join(parts)
 
 
 def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,

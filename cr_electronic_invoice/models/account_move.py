@@ -694,7 +694,7 @@ class AccountInvoiceElectronic(models.Model):
                                                  body=msg_body)
                                 continue
 
-                            xml = api_facturae.gen_xml_mr_43(
+                            xml = api_facturae.gen_xml_mr_44(
                                 inv.number_electronic, inv.partner_id.vat,
                                 inv.date_issuance,
                                 tipo, detalle_mensaje, inv.company_id.vat,
