@@ -1038,7 +1038,7 @@ def consulta_documentos(self, inv, env, token_m_h, date_cr, xml_firmado):
 
     if (estado_m_h in ['aceptado', 'rechazado']) or (inv.move_type in ['out_invoice', 'out_refund']):
         inv.fname_xml_respuesta_tributacion = 'AHC_' + inv.number_electronic + '.xml'
-        self.env['ir.attachment'].create({'name': inv.fname_xml_respuesta_tributacion,
+        self.env['ir.attachment'].sudo().create({'name': inv.fname_xml_respuesta_tributacion,
                                           'type': 'binary',
                                           'datas': response_json.get('respuesta-xml'),
                                           'res_model': inv._name,
@@ -1130,6 +1130,11 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
     invoice.invoice_date = invoice.date_issuance
     invoice.tipo_documento = 'CCE'
     invoice.state_invoice_partner = '1'
+    if document_type == 'NotaCreditoElectronica':
+        move_type = 'in_refund'  # Nota de crédito
+    else:
+        move_type = 'in_invoice'
+    invoice.move_type = move_type
 
     emisor = invoice_xml.xpath("inv:Emisor/inv:Identificacion/inv:Numero", namespaces=namespaces)[0].text
     tipo_emisor = invoice_xml.xpath("inv:Emisor/inv:Identificacion/inv:Tipo", namespaces=namespaces)[0].text
