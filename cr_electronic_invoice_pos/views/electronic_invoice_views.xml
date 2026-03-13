@@ -109,9 +109,10 @@
     <record id="view_pos_order_electronic_invoice_tree" model="ir.ui.view">
         <field name="name">pos.order.electronic.invoice.tree</field>
         <field name="model">pos.order</field>
-        <field name="inherit_id" ref="point_of_sale.view_pos_order_tree"/>
+        <field name="inherit_id" ref="point_of_sale.view_pos_order_tree"/> 
         <field name="arch" type="xml">
             <field name="state" position="before">
+                <field name="amount_tax" sum="Tax total" widget="monetary" decoration-bf="1"/>
                 <field name="tipo_documento"/>
                 <field name="number_electronic"/>
                 <field name="state_tributacion"/>
@@ -365,10 +366,4 @@
             <div>
                 Web :&nbsp;<a href="${object.company_id.website}">${object.company_id.website}</a>
             </div>
-        %endif
-        <p></p>
-    </div>
-</div>
-            ]]></field>
-</record>
-</odoo>
+ 
