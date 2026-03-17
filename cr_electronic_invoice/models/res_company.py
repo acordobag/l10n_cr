@@ -247,37 +247,58 @@ class CompanyElectronic(models.Model):
                 body=_("Signature requerido"))
 
     def action_get_economic_activities(self):
-        if self.vat:
-            json_response = api_facturae.get_economic_activities(self)
+        self.ensure_one()
 
-            self.env.cr.execute('update economic_activity set active=False')
-
-            self.message_post(subject=_('Actividades Económicas'),
-                              body=_('Aviso!.\n Cargando actividades económicas desde Hacienda'))
-
-            if json_response["status"] == 200:
-                activities = json_response["activities"]
-                activities_codes = list([])
-                for activity in activities:
-                    if activity["estado"] == "A":
-                        activities_codes.append(activity["codigo"])
-
-                economic_activities = self.env['economic.activity'].with_context(active_test=False).search([
-                    ('code', 'in', activities_codes)])
-
-                for activity in economic_activities:
-                    activity.active = True
-
-                self.legal_name = json_response["name"]
-            else:
-                alert = {
-                    'title': json_response["status"],
-                    'message': json_response["text"]
-                }
-                return {'value': {'vat': ''}, 'warning': alert}
-        else:
+        if not self.vat:
             alert = {
                 'title': 'Atención',
                 'message': _('Company VAT is invalid')
+            }
+            return {'value': {'vat': ''}, 'warning': alert}
+
+        json_response = api_facturae.get_economic_activities(self)
+
+        self.env.cr.execute('UPDATE economic_activity SET active = FALSE')
+
+        self.message_post(
+            subject=_('Actividades Económicas'),
+            body=_('Aviso!.\n Cargando actividades económicas desde Hacienda')
+        )
+
+        if json_response.get("status") == 200:
+            activities = json_response.get("activities", [])
+
+            selected_ids = []
+            processed_codes = set()
+
+            for activity in activities:
+                if activity.get("estado") != "A":
+                    continue
+
+                code = activity.get("codigo")
+                if not code or code in processed_codes:
+                    continue
+
+                processed_codes.add(code)
+
+                economic_activity = self.env['economic.activity'].with_context(active_test=False).search(
+                    [('code', '=', code)],
+                    limit=1
+                )
+
+                if economic_activity:
+                    selected_ids.append(economic_activity.id)
+
+            if selected_ids:
+                self.env['economic.activity'].with_context(active_test=False).browse(selected_ids).write({
+                    'active': True
+                })
+
+            self.legal_name = json_response.get("name")
+
+        else:
+            alert = {
+                'title': json_response.get("status"),
+                'message': json_response.get("text")
             }
             return {'value': {'vat': ''}, 'warning': alert}
