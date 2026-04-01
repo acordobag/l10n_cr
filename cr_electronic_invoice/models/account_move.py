@@ -1259,6 +1259,7 @@ class AccountInvoiceElectronic(models.Model):
                             _tax_exoneration = False
                             _tax_no_subject = False
                             _percentage_exoneration = 0
+                            _tax_exempt = False
                             if inv_line.tax_ids:
                                 tax_index = 0
 
@@ -1279,6 +1280,8 @@ class AccountInvoiceElectronic(models.Model):
 
                                         if i.iva_tax_code == '01':
                                             _tax_no_subject = True
+                                        if i.iva_tax_code == '10':
+                                            _tax_exempt = True
                                         taxes_lookup[i.id] = {'tax_code': i.tax_code,
                                                               'tarifa': i.amount,
                                                               'iva_tax_desc': i.iva_tax_desc,
@@ -1337,6 +1340,8 @@ class AccountInvoiceElectronic(models.Model):
                                         total_servicio_exonerado += (base_line * _percentage_exoneration)
                                     elif _tax_no_subject:
                                         total_servicio_no_sujeto += base_line
+                                    elif _tax_exempt:
+                                        total_servicio_exento += base_line
                                     else:
                                         total_servicio_gravado += base_line
 
@@ -1352,6 +1357,8 @@ class AccountInvoiceElectronic(models.Model):
 
                                     elif _tax_no_subject:
                                         total_mercaderia_no_sujeta += base_line
+                                    elif _tax_exempt:
+                                        total_mercaderia_exento += base_line
                                     else:
                                         total_mercaderia_gravado += base_line
 
