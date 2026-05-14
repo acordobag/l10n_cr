@@ -1207,16 +1207,20 @@ class AccountInvoiceElectronic(models.Model):
 
                             price_unit = round(line_taxes['total_excluded'], 5)
 
-                            base_line = round(price_unit * quantity, 5)
-                            descuento = inv_line.discount and round(
-                                base_line - inv_line.price_subtotal,
-                                5) or 0.0
-
                             # Usar los montos reales de Odoo para evitar diferencias
                             # de redondeo entre la factura y el XML.
                             subtotal_line = round(inv_line.price_subtotal, 5)
                             line_total_odoo = round(inv_line.price_total, 5)
                             line_tax_odoo = round(line_total_odoo - subtotal_line, 5)
+
+                            if inv_line.discount:
+                                base_line_original = round(price_unit * quantity, 5)
+                                descuento = round(base_line_original - subtotal_line, 5)
+                            else:
+                                descuento = 0.0
+
+                            base_line = round(subtotal_line + descuento, 5)
+                            price_unit = round(base_line / quantity, 5)
 
                             # Corregir error cuando un producto trae en el nombre "", por ejemplo: "disco duro"
                             # Esto no debería suceder, pero, si sucede, lo corregimos
