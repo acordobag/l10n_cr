@@ -1236,17 +1236,27 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
                 _logger.debug('FECR - tax_amount: %s', tax_amount)
 
                 if product_id and product_id.non_tax_deductible:
-                    tax = invoice.env['account.tax'].search([('tax_code', '=', tax_code),
-                                                             ('amount', '=', tax_amount),
-                                                             ('type_tax_use', '=', 'purchase'),
-                                                             ('non_tax_deductible', '=', True),
-                                                             ('active', '=', True)], limit=1)
+                    tax = invoice.env['account.tax'].search([
+                        ('tax_code', '=', tax_code),
+                        ('amount', '=', tax_amount),
+                        ('type_tax_use', '=', 'purchase'),
+                        ('non_tax_deductible', '=', True),
+                        ('active', '=', True),
+                        '|',
+                        ('company_id', '=', invoice.company_id.id),
+                        ('company_id', '=', False),
+                    ], limit=1)
                 else:
-                    tax = invoice.env['account.tax'].search([('tax_code', '=', tax_code),
-                                                             ('amount', '=', tax_amount),
-                                                             ('type_tax_use', '=', 'purchase'),
-                                                             ('non_tax_deductible', '=', False),
-                                                             ('active', '=', True)], limit=1)
+                    tax = invoice.env['account.tax'].search([
+                        ('tax_code', '=', tax_code),
+                        ('amount', '=', tax_amount),
+                        ('type_tax_use', '=', 'purchase'),
+                        ('non_tax_deductible', '=', False),
+                        ('active', '=', True),
+                        '|',
+                        ('company_id', '=', invoice.company_id.id),
+                        ('company_id', '=', False),
+                    ], limit=1)
 
                 if tax:
                     total_tax += float(tax_node.xpath("inv:Monto", namespaces=namespaces)[0].text)
@@ -1255,11 +1265,16 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
                     if exonerations:
                         for exoneration_node in exonerations:
                             exoneration_percentage = float(exoneration_node.xpath("inv:PorcentajeExoneracion", namespaces=namespaces)[0].text)
-                            tax = invoice.env['account.tax'].search([('percentage_exoneration', '=', exoneration_percentage),
-                                                                     ('type_tax_use', '=', 'purchase'),
-                                                                     ('non_tax_deductible', '=', False),
-                                                                     ('has_exoneration', '=', True),
-                                                                     ('active', '=', True)], limit=1)
+                            tax = invoice.env['account.tax'].search([
+                                ('percentage_exoneration', '=', exoneration_percentage),
+                                ('type_tax_use', '=', 'purchase'),
+                                ('non_tax_deductible', '=', False),
+                                ('has_exoneration', '=', True),
+                                ('active', '=', True),
+                                '|',
+                                ('company_id', '=', invoice.company_id.id),
+                                ('company_id', '=', False),
+                            ], limit=1)
                             taxes.append((4, tax.id))
                     else:
                         taxes.append((4, tax.id))

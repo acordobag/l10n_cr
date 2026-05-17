@@ -69,9 +69,23 @@ class AccountJournalInherit(models.Model):
         #         #     if invoice:
         #         #         break
         #         # if not invoice:
-        invoice = self.env['account.move'].create({})
-        invoice.fname_xml_supplier_approval = attachment.name
-        invoice.xml_supplier_approval = attachment.datas
+        # Keep this fix limited to the XML import path only.
+        # The imported supplier XML must be created with a purchase move type
+        # and with the same purchase journal that called create_invoice_from_attachment().
+        if self.type != 'purchase':
+            raise UserError(_(
+                "El XML de proveedor debe importarse desde un diario de compras. "
+                "Diario actual: %s"
+            ) % self.display_name)
+
+        move_type = 'in_refund' if document_type == 'NotaCreditoElectronica' else 'in_invoice'
+
+        invoice = self.env['account.move'].with_context(default_move_type=move_type).create({
+            'move_type': move_type,
+            'journal_id': self.id,
+            'fname_xml_supplier_approval': attachment.name,
+            'xml_supplier_approval': attachment.datas,
+        })
         try:
             invoice.load_xml_data()
             invoice.action_post()

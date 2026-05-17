@@ -546,17 +546,32 @@ class AccountInvoiceElectronic(models.Model):
             analytic_account = False
             product = False
             _logger.debug('Started process.')
-            purchase_journal = self.env['account.journal'].search([('type', '=', 'purchase')], limit=1)
+            purchase_journal = self.journal_id if self.journal_id and self.journal_id.type == 'purchase' else False
+
+            if not purchase_journal:
+                purchase_journal = self.env['account.journal'].search([
+                    ('type', '=', 'purchase'),
+                    '|',
+                    ('company_id', '=', self.company_id.id),
+                    ('company_id', '=', False),
+                ], limit=1)
+
             default_account_id = purchase_journal.expense_account_id.id
+
             if default_account_id:
-                account = self.env['account.account'].search([('id', '=', default_account_id)], limit=1)
+                account = self.env['account.account'].search([
+                    ('id', '=', default_account_id),
+                    ('company_id', '=', self.company_id.id),
+                ], limit=1)
                 load_lines = purchase_journal.load_lines
             else:
                 default_account_id = self.env['ir.config_parameter'].sudo().get_param('expense_account_id')
                 load_lines = bool(self.env['ir.config_parameter'].sudo().get_param('load_lines'))
                 if default_account_id:
-                    account = self.env['account.account'].search([('id', '=', default_account_id)], limit=1)
-
+                    account = self.env['account.account'].search([
+                        ('id', '=', default_account_id),
+                        ('company_id', '=', self.company_id.id),
+                    ], limit=1)
             analytic_account_id = purchase_journal.expense_analytic_account_id.id
             if analytic_account_id:
                 analytic_account = self.env['account.analytic.account'].search([('id', '=', analytic_account_id)],

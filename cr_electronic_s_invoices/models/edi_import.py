@@ -13,28 +13,21 @@ class AccountInvoiceElectronic(models.Model):
         res = super()._is_compatible_with_journal(journal)
         if self.code != 'facturx_cr_1_0':
             return res
-        return journal.type == 'sale'
+        return journal.type == 'purchase'
 
     def _create_invoice_from_xml_tree(self, filename, tree, journal=None):
-        """ Create a new invoice with the data inside the xml.
-
-        :param filename: The name of the xml.
-        :param tree:     The tree of the xml to import.
-        :param journal:  The journal on which importing the invoice.
-        :returns:        The created invoice.
-        """
-        _logger.debug('Into load_xml_data new')
+        """Create a new invoice with the data inside the xml."""
         self.ensure_one()
+        if self.code != 'facturx_cr_1_0':
+            return super()._create_invoice_from_xml_tree(filename, tree, journal)
 
-        # TO OVERRIDE
-        invoice = self.env['account.move']
-
+        invoice = self.env['account.move'].create({})
         invoice.xml_supplier_approval = tree
         invoice.fname_xml_supplier_approval = filename
         invoice.load_xml_data()
-        
-        return super()._create_invoice_from_xml_tree(filename, tree, journal)
-    
+        _logger.info('CR supplier XML processed from attachment: %s', filename)
+        return invoice
+
     def _is_facturx(self, filename, tree):
-        return self.code == 'facturx_1_0_05'
+        return self.code == 'facturx_cr_1_0'
     
