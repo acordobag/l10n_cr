@@ -1299,6 +1299,38 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
                        'tax_ids': taxes}
             new_lines.append((0, 0, columns))
 
+            # v4.4: Importar OtrosCargos como líneas adicionales sin impuestos.
+            # Estos cargos no vienen dentro de DetalleServicio/LineaDetalle,
+            # pero sí forman parte de ResumenFactura/TotalComprobante.
+            other_charge_nodes = invoice_xml.xpath("inv:OtrosCargos", namespaces=namespaces)
+
+            for other_charge_node in other_charge_nodes:
+                amount_node = other_charge_node.xpath("inv:MontoCargo", namespaces=namespaces)
+                if not amount_node:
+                    continue
+
+                amount = float(amount_node[0].text or '0.0')
+                if not amount:
+                    continue
+
+                detail_node = other_charge_node.xpath("inv:Detalle", namespaces=namespaces)
+                detail = detail_node[0].text if detail_node and detail_node[0].text else _('Otros cargos')
+
+                columns = {
+                    'name': detail,
+                    'move_id': invoice.id,
+                    'price_unit': amount,
+                    'quantity': 1.0,
+                    'sequence': len(new_lines) + 1,
+                    'product_id': False,
+                    'account_id': account_id.id,
+                    'analytic_account_id': analytic_account,
+                    'economic_activity_id': activity_id,
+                    'tax_ids': [(6, 0, [])],
+                }
+
+                new_lines.append((0, 0, columns))
+
         invoice.invoice_line_ids = new_lines
 
     invoice.amount_total_electronic_invoice = invoice_xml.xpath("inv:ResumenFactura/inv:TotalComprobante", namespaces=namespaces)[0].text
