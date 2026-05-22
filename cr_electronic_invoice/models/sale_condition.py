@@ -4,6 +4,7 @@ from odoo import models, fields
 
 class SaleConditions(models.Model):
     _name = "sale.conditions"
+    _description = "Costa Rica Electronic Invoice Sale Condition"
 
     active = fields.Boolean(default=True)
     code = fields.Char()

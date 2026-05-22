@@ -69,7 +69,7 @@
                 <attribute name="invisible">False</attribute>
             </xpath>
 
-            <xpath expr="(//field[@name='amount_total'])[last()]" position="after">
+            <xpath expr="//field[@name='tax_totals']" position="after">
                 <field name="amount_tax_electronic_invoice" invisible="move_type in ('out_invoice', 'out_refund')"/>
                 <field name="amount_total_electronic_invoice" invisible="move_type in ('out_invoice', 'out_refund')"/>
             </xpath>
@@ -115,10 +115,9 @@
                     state_tributacion == 'rechazado'
                 </attribute>
             </list>
-            <field name="state" position="before">
+            <field name="name" position="after">
                 <field name="tipo_documento" string="Doc Elect." optional="show"/>
                 <field name="sequence" string="Consecutive" optional="show"/>
-                <field name="move_type" invisible="1" readonly="1" optional="show"/>
                 <field name="state_tributacion" string="State FE" optional="show"/>
             </field>
             <field name="company_id" position="after">

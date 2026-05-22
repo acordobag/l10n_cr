@@ -4,6 +4,7 @@ from odoo import models, fields
 
 class PaymentMethods(models.Model):
     _name = "payment.methods"
+    _description = "Costa Rica Electronic Invoice Payment Method"
 
     active = fields.Boolean(default=True)
     sequence = fields.Char()

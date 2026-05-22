@@ -195,10 +195,10 @@ class AccountInvoiceElectronic(models.Model):
 
     not_loaded_invoice_date = fields.Date(string='Original Invoice Date not loaded', readonly=True)
 
-    _sql_constraints = [
-        ('number_electronic_uniq', 'unique (company_id, number_electronic)',
-         "La clave de comprobante debe ser única"),
-    ]
+    _number_electronic_uniq = models.Constraint(
+        'unique (company_id, number_electronic)',
+        "La clave de comprobante debe ser única",
+    )
 
     qr_image = fields.Binary("QR Code", compute='_compute_qr_code')
     partner_vat = fields.Char(string='Partner Tax ID', related="partner_id.vat",
@@ -1382,12 +1382,13 @@ class AccountInvoiceElectronic(models.Model):
                                 line["impuesto"] = taxes
                                 line["impuestoNeto"] = 0 if _tax_from_factory else round(_line_tax, 5)
 
-                            # Si no hay product_uom_id se asume como Servicio
-                            if inv_line.product_id.type == 'service' or \
-                                    inv_line.product_uom_id.category_id.name in ('Service',
-                                                                                 'Services',
-                                                                                 'Servicio',
-                                                                                 'Servicios'):
+                            # Odoo 19 removed UoM categories; service FE units are detected by code.
+                            service_uom_codes = {'Sp', 'Spe', 'St', 'Os'}
+                            is_service_line = (
+                                inv_line.product_id.type == 'service' or
+                                (inv_line.product_uom_id and inv_line.product_uom_id.code in service_uom_codes)
+                            )
+                            if is_service_line:
                                 if taxes:
                                     if _tax_exoneration:
                                         if _percentage_exoneration < 1:

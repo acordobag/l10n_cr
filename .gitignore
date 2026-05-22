@@ -59,3 +59,11 @@ docs/_build/
 
 # VS Code
 .vscode/
+
+# Local Odoo 19 runtime and test artifacts
+.odoo19-data/
+.odoo19-python/
+.odoo19-python-lite/
+odoo19-*.log
+ps-start-*.log
+start-process-test.txt

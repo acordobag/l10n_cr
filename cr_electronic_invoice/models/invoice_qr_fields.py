@@ -3,6 +3,7 @@ from odoo import fields, models
 
 class InvoiceQrFields(models.Model):
     _name = 'invoice.qr.fields'
+    _description = "Costa Rica Electronic Invoice QR Field"
     _order = 'sequence'
 
     sequence = fields.Integer()

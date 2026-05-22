@@ -25,11 +25,10 @@ class ResConfigSettings(models.TransientModel):
             bccr_username=get_param('bccr_username'),
             bccr_email=get_param('bccr_email'),
             bccr_token=get_param('bccr_token'),
-            exchange_source=get_param('exchange_source'),
+            exchange_source=get_param('exchange_source') or 'disabled',
         )
         return res
 
-    @api.model
     def set_values(self):
         super().set_values()
         set_param = self.env['ir.config_parameter'].sudo().set_param
