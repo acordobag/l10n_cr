@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-
+<?xml version='1.0' encoding='UTF-8'?>
 <odoo>
 
     <record id="view_res_partner_inherit" model="ir.ui.view">
@@ -22,25 +21,25 @@
             <xpath expr="//form/sheet/notebook" position="before">
                 <group col="7">
                     <separator colspan="7"/>
-                    <field name="activity_id" domain="[('id', 'in', economic_activities_ids)]" options="{&quot;no_create&quot;: True, &quot;active_test&quot;: False}" colspan="5" />
-                    <button name="action_get_economic_activities" type="object" string="Consultar Actividad Economica en Hacienda" colspan="2" />
-                    <field name="economic_activities_ids" readonly="0" widget="section_and_note_one2many" mode="tree" context="{'partner_id': id}" colspan="7">
-                        <tree editable="bottom">
-                            <field name="code" />
+                    <field name="activity_id" domain="[('id', 'in', economic_activities_ids)]" options="{&quot;no_create&quot;: True, &quot;active_test&quot;: False}" colspan="5"/>
+                    <button name="action_get_economic_activities" type="object" string="Consultar Actividad Economica en Hacienda" colspan="2"/>
+                    <field name="economic_activities_ids" readonly="0" widget="section_and_note_one2many" mode="list" context="{'partner_id': id}" colspan="7">
+                        <list editable="bottom">
+                            <field name="code"/>
                             <field name="name"/>
                             <field name="sale_type"/>
-                        </tree>
+                        </list>
                     </field>
                 </group>
             </xpath>
 
             <field name="category_id" position="after">
-                <field name="has_exoneration" attrs="{'invisible': [('supplier_rank', '>', 0)]}" />
-                <field name="export" attrs="{'invisible': [('supplier_rank', '>', 0)]}" />
+                <field name="has_exoneration" invisible="supplier_rank &gt; 0"/>
+                <field name="export" invisible="supplier_rank &gt; 0"/>
             </field>
 
             <xpath expr="//page[3]" position="after">
-                <page name="exoneration_config" string="Exoneration" attrs="{'invisible': [('has_exoneration', '!=', True)]}">
+                <page name="exoneration_config" string="Exoneration" invisible="not has_exoneration">
                     <group col="2">
                         <field name="exoneration_number"/>
                         <field name="type_exoneration"/>

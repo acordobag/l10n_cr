@@ -1200,7 +1200,7 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
     _logger.debug('FECR - load_lines: %s - account: %s', (load_lines, account_id))
 
     product = product_id or False
-    analytic_account = analytic_account_id.id if analytic_account_id else False
+    analytic_distribution = {str(analytic_account_id.id): 100.0} if analytic_account_id else False
 
     if load_lines:
         lines = invoice_xml.xpath("inv:DetalleServicio/inv:LineaDetalle", namespaces=namespaces)
@@ -1294,9 +1294,10 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
                        'discount_note': discount_note,
                        'product_id': product,
                        'account_id': account_id.id,
-                       'analytic_account_id': analytic_account,
                        'economic_activity_id': activity_id,
                        'tax_ids': taxes}
+            if analytic_distribution:
+                columns['analytic_distribution'] = analytic_distribution
             new_lines.append((0, 0, columns))
 
             # v4.4: Importar OtrosCargos como líneas adicionales sin impuestos.
@@ -1324,10 +1325,11 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
                     'sequence': len(new_lines) + 1,
                     'product_id': False,
                     'account_id': account_id.id,
-                    'analytic_account_id': analytic_account,
                     'economic_activity_id': activity_id,
                     'tax_ids': [(6, 0, [])],
                 }
+                if analytic_distribution:
+                    columns['analytic_distribution'] = analytic_distribution
 
                 new_lines.append((0, 0, columns))
 

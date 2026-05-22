@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <odoo>
     
         <!-- Quitar el boton de Cancelar Factura -->
@@ -6,11 +6,11 @@
             <field name="name">payment.methods.tree</field>
             <field name="model">payment.methods</field>
             <field name="arch" type="xml">
-                <tree string="Payment methods">
+                <list string="Payment methods">
                     <field name="sequence"/>
                     <field name="name"/>
                     <field name="active"/>
-                </tree>
+                </list>
             </field>
         </record>
 
@@ -28,7 +28,7 @@
         <record id="action_payment_methods" model="ir.actions.act_window">
             <field name="name">Payment methods</field>
             <field name="res_model">payment.methods</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
             <!--<field name="search_view_id" ref="view_account_invoice_filter"/>-->
         </record>
     

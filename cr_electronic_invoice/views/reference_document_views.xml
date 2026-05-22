@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <odoo>
 
     <record id="view_reference_document_form" model="ir.ui.view">
@@ -22,11 +22,11 @@
         <field name="name">reference.document.tree</field>
         <field name="model">reference.document</field>
         <field name="arch" type="xml">
-            <tree string="Reference documents">
+            <list string="Reference documents">
                 <field name="code"/>
                 <field name="name"/>
                 <field name="active"/>
-            </tree>
+            </list>
         </field>
     </record>
 
@@ -34,24 +34,24 @@
         <field name="name">reference.code.tree</field>
         <field name="model">reference.code</field>
         <field name="arch" type="xml">
-            <tree string="Reference code">
+            <list string="Reference code">
                 <field name="code"/>
                 <field name="name"/>
                 <field name="active"/>
-            </tree>
+            </list>
         </field>
     </record>
 
     <record id="action_reference_document" model="ir.actions.act_window">
         <field name="name">Reference documents</field>
         <field name="res_model">reference.document</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
     </record>
 
     <record id="action_reference_code" model="ir.actions.act_window">
         <field name="name">Reference code</field>
         <field name="res_model">reference.code</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
     </record>
 
 </odoo>

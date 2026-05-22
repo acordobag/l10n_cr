@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <odoo>
 
     <record id="view_economic_activity_form" model="ir.ui.view">
@@ -8,11 +8,11 @@
             <form string="Economic activity">
                 <sheet string="Economic activity">
                     <group col="4">
-                        <field name="code" />
-                        <field name="name" />
-                        <field name="description" />
-                        <field name="active" widget="boolean_button" />
-                        <field name="sale_type" />
+                        <field name="code"/>
+                        <field name="name"/>
+                        <field name="description"/>
+                        <field name="active" widget="boolean_button"/>
+                        <field name="sale_type"/>
                     </group>
                 </sheet>
             </form>
@@ -23,13 +23,13 @@
         <field name="name">economic.activity.tree</field>
         <field name="model">economic.activity</field>
         <field name="arch" type="xml">
-            <tree string="Economic activity" editable="bottom">
-                <field name="code" />
-                <field name="name" />
-                <field name="description" />
-                <field name="active" />
-                <field name="sale_type" />
-            </tree>
+            <list string="Economic activity" editable="bottom">
+                <field name="code"/>
+                <field name="name"/>
+                <field name="description"/>
+                <field name="active"/>
+                <field name="sale_type"/>
+            </list>
         </field>
     </record>
 
@@ -38,8 +38,8 @@
         <field name="model">economic.activity</field>
         <field name="arch" type="xml">
             <search string="Search Activity">
-                <field name="name" string="Activity" filter_domain="['|', ('name','ilike',self), ('code','=',self)]" />
-                <field name="id" string="ID" filter_domain="[('id','=',self)]" />
+                <field name="name" string="Activity" filter_domain="['|', ('name','ilike',self), ('code','=',self)]"/>
+                <field name="id" string="ID" filter_domain="[('id','=',self)]"/>
                 <separator/>
                 <filter name="Active" string="Active" domain="[('active','=',True)]"/>
                 <filter name="Inactive" string="Inactive" domain="[('active', '=', False)]"/>
@@ -50,7 +50,7 @@
     <record id="action_economic_activity" model="ir.actions.act_window">
         <field name="name">Economic activity</field>
         <field name="res_model">economic.activity</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_economic_activity_filter"/>
     </record>
 

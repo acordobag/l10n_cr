@@ -182,7 +182,7 @@ class CompanyElectronic(models.Model):
             template = self.env.ref('cr_electronic_invoice.email_template_edi_expiration_notice', False)
 
             template_values = {
-                'email_to': '${object.email|safe}',
+                'email_to': '{{ object.email }}',
                 'email_cc': False,
                 'auto_delete': True,
                 'partner_to': False,

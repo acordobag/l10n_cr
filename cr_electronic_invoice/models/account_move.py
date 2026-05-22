@@ -258,17 +258,21 @@ class AccountInvoiceElectronic(models.Model):
 
     def _compute_amount_total(self):
         for rec in self:
-            record = rec.currency_id
-            local = rec.company_id.currency_id
-
-            rec.comp_amount_total = record.compute(rec.amount_total, local)
+            rec.comp_amount_total = rec.currency_id._convert(
+                rec.amount_total,
+                rec.company_id.currency_id,
+                rec.company_id,
+                rec.invoice_date or rec.date or fields.Date.context_today(rec),
+            )
 
     def _compute_amount_untaxed(self):
         for rec in self:
-            record = rec.currency_id
-            local = rec.company_id.currency_id
-
-            rec.comp_amount_untaxed = record.compute(rec.amount_untaxed, local)
+            rec.comp_amount_untaxed = rec.currency_id._convert(
+                rec.amount_untaxed,
+                rec.company_id.currency_id,
+                rec.company_id,
+                rec.invoice_date or rec.date or fields.Date.context_today(rec),
+            )
 
     def _compute_qr_code(self):
         qr_info = ''
@@ -309,7 +313,9 @@ class AccountInvoiceElectronic(models.Model):
 
     @api.onchange('partner_id')
     def _onchange_partner_id(self, validate_payment=True):
-        super()._onchange_partner_id()
+        parent_onchange = getattr(super(), '_onchange_partner_id', None)
+        if parent_onchange:
+            parent_onchange()
         if (validate_payment):
             self.payment_methods_id = self.partner_id.payment_methods_id
 
@@ -345,6 +351,9 @@ class AccountInvoiceElectronic(models.Model):
                                           raise_if_not_found=False)
         else:
             email_template = self.env.ref('account.email_template_edi_invoice', raise_if_not_found=False)
+
+        if not email_template:
+            raise UserError(_('The invoice email template could not be found.'))
 
         email_template.attachment_ids = [(5, 0, 0)]
 
@@ -411,6 +420,9 @@ class AccountInvoiceElectronic(models.Model):
         else:
             email_template = self.env.ref('account.email_template_edi_invoice', raise_if_not_found=False)
 
+        if not email_template:
+            raise UserError(_('The invoice email template could not be found.'))
+
         email_template.attachment_ids = [(5, 0, 0)]
 
         lang = False
@@ -460,16 +472,15 @@ class AccountInvoiceElectronic(models.Model):
         else:
             raise UserError(_('Partner is not assigne to this invoice'))
 
-        compose_form = self.env.ref('account.account_invoice_send_wizard_form', raise_if_not_found=False).sudo()
+        compose_form = self.env.ref('account.account_move_send_wizard_form', raise_if_not_found=False)
+        if not compose_form:
+            raise UserError(_('The invoice send wizard view could not be found.'))
         ctx = dict(
-            default_model='account.move',
-            default_res_id=self.id,
-            default_res_model='account.move',
-            default_use_template=bool(email_template),
+            active_model='account.move',
+            active_ids=self.ids,
+            default_move_id=self.id,
             default_template_id=email_template and email_template.id or False,
-            default_composition_mode='comment',
             mark_invoice_as_sent=True,
-            custom_layout="mail.mail_notification_paynow",
             model_description=self.with_context(lang=lang).type_name,
             force_email=True
         )
@@ -477,10 +488,9 @@ class AccountInvoiceElectronic(models.Model):
         return {
             'name': _('Send Invoice'),
             'type': 'ir.actions.act_window',
-            'view_type': 'form',
             'view_mode': 'form',
-            'res_model': 'account.invoice.send',
-            'views': [(compose_form.id, 'form')],
+            'res_model': 'account.move.send.wizard',
+            'views': [(compose_form.sudo().id, 'form')],
             'view_id': compose_form.id,
             'target': 'new',
             'context': ctx,
@@ -556,22 +566,32 @@ class AccountInvoiceElectronic(models.Model):
                     ('company_id', '=', False),
                 ], limit=1)
 
+            Account = self.env['account.account']
+
+            def _find_company_account(account_id):
+                if not account_id:
+                    return Account.browse()
+                try:
+                    account_id = int(account_id)
+                except (TypeError, ValueError):
+                    return Account.browse()
+
+                domain = [
+                    ('id', '=', account_id),
+                    ('company_ids', 'parent_of', self.company_id.id),
+                ]
+                return Account.search(domain, limit=1)
+
             default_account_id = purchase_journal.expense_account_id.id
 
             if default_account_id:
-                account = self.env['account.account'].search([
-                    ('id', '=', default_account_id),
-                    ('company_id', '=', self.company_id.id),
-                ], limit=1)
+                account = _find_company_account(default_account_id)
                 load_lines = purchase_journal.load_lines
             else:
                 default_account_id = self.env['ir.config_parameter'].sudo().get_param('expense_account_id')
-                load_lines = bool(self.env['ir.config_parameter'].sudo().get_param('load_lines'))
+                load_lines = self.env['ir.config_parameter'].sudo().get_param('load_lines') in (True, 'True', 'true', '1')
                 if default_account_id:
-                    account = self.env['account.account'].search([
-                        ('id', '=', default_account_id),
-                        ('company_id', '=', self.company_id.id),
-                    ], limit=1)
+                    account = _find_company_account(default_account_id)
             analytic_account_id = purchase_journal.expense_analytic_account_id.id
             if analytic_account_id:
                 analytic_account = self.env['account.analytic.account'].search([('id', '=', analytic_account_id)],
@@ -1662,7 +1682,7 @@ class AccountInvoiceElectronic(models.Model):
                 if iva_devuelto:
                     self.env['account.move.line'].create({
                         'name': 'IVA Devuelto',
-                        'invoice_id': inv.id,
+                        'move_id': inv.id,
                         'product_id': prod_iva_devuelto.id,
                         'account_id': prod_iva_devuelto.property_account_income_id.id,
                         'price_unit': -iva_devuelto,
@@ -1696,78 +1716,6 @@ class AccountInvoiceElectronic(models.Model):
     def update_text_amount(self):
         for inv in self:
             inv.invoice_amount_text = extensions.text_converter.number_to_text_es(inv.amount_total)
-
-    def _reverse_move_vals(self, default_values, cancel=True):
-        move_vals = super()._reverse_move_vals(default_values, cancel)
-        type_override = move_vals.get('type_override')
-        if type_override:
-            move_vals['move_type'] = type_override
-
-        return move_vals
-
-    def _reverse_moves(self, default_values_list=None, cancel=False):
-        """ Reverse a recordset of account.move.
-        If cancel parameter is true, the reconcilable or liquidity lines
-        of each original move will be reconciled with its reverse's.
-
-        :param default_values_list: A list of default values to consider per move.
-                                    ('type' & 'reversed_entry_id' are computed in the method).
-        :return:                    An account.move recordset, reverse of the current self.
-        """
-        if not default_values_list:
-            default_values_list = [{} for move in self]
-
-        if cancel:
-            lines = self.mapped('line_ids')
-            # Avoid maximum recursion depth.
-            if lines:
-                lines.remove_move_reconcile()
-
-        reverse_type_map = {
-            'entry': 'entry',
-            'out_invoice': 'out_refund',
-            'out_refund': 'entry',
-            'in_invoice': 'in_refund',
-            'in_refund': 'entry',
-            'out_receipt': 'entry',
-            'in_receipt': 'entry',
-        }
-
-        move_vals_list = []
-        for move, default_values in zip(self, default_values_list):
-            default_values.update({
-                'move_type': reverse_type_map[move.move_type],
-                'reversed_entry_id': move.id,
-            })
-            move_vals_list.append(move.with_context(move_reverse_cancel=cancel)._reverse_move_vals(default_values,
-                                                                                                   cancel=cancel))
-
-        reverse_moves = self.env['account.move'].create(move_vals_list)
-        for move, reverse_move in zip(self, reverse_moves.with_context(check_move_validity=False)):
-            # Update amount_currency if the date has changed.
-            if move.date != reverse_move.date:
-                for line in reverse_move.line_ids:
-                    if line.currency_id:
-                        line._onchange_currency()
-            reverse_move._recompute_dynamic_lines(recompute_all_taxes=False)
-        reverse_moves._check_balanced()
-
-        # Reconcile moves together to cancel the previous one.
-        if cancel:
-            # Used for use "Action Post" to get electronic number
-            reverse_moves.with_context(move_reverse_cancel=cancel).action_post()
-            for move, reverse_move in zip(self, reverse_moves):
-                lines = move.line_ids.filtered(
-                    lambda x: (x.account_id.reconcile or x.account_id.internal_type == 'liquidity')
-                              and not x.reconciled
-                )
-                for line in lines:
-                    counterpart_lines = reverse_move.line_ids.filtered(lambda x: x.account_id == line.account_id
-                                                                                 and x.currency_id == line.currency_id
-                                                                                 and not x.reconciled)
-                    (line + counterpart_lines).with_context(move_reverse_cancel=cancel).reconcile()
-
-        return reverse_moves
 
     def create_partner_from_xml(self):
 

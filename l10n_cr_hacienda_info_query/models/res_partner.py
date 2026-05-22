@@ -7,6 +7,14 @@ import requests
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
+    def _query_service_warning(self, message):
+        return {
+            'warning': {
+                'title': 'Query service',
+                'message': message,
+            }
+        }
+
     def limpiar_cedula(self, vat):
         if vat:
             return ''.join(i for i in vat if i.isdigit())
@@ -19,6 +27,7 @@ class ResPartner(models.Model):
         usuario_yo_contribuyo = get_param('usuario_yo_contribuyo')
         token_yo_contribuyo = get_param('token_yo_contribuyo')
         url_base = get_param('url_base')
+        warning = False
 
         if url_base_yo_contribuyo and usuario_yo_contribuyo and token_yo_contribuyo:
             url_base_yo_contribuyo = url_base_yo_contribuyo.strip()
@@ -41,8 +50,8 @@ class ResPartner(models.Model):
                         all_emails_yo_contribuyo = all_emails_yo_contribuyo + email_yo_contribuyo['Correo'] + ','
                     all_emails_yo_contribuyo = all_emails_yo_contribuyo[:-1]
                     self.email = all_emails_yo_contribuyo
-            except:
-                self.env.user.notify_default(message='The email query service is unavailable at this moment', title='Query service')
+            except Exception:
+                warning = self._query_service_warning('The email query service is unavailable at this moment')
 
         if url_base:
             url_base = url_base.strip()
@@ -80,10 +89,12 @@ class ResPartner(models.Model):
                                                                                       '=',
                                                                                       str(act.get('codigo')))],
                                                                                     limit=1).id
-            except:
-                self.env.user.notify_default(message='The name query service is unavailable at this moment', title='Query service')
+            except Exception:
+                warning = self._query_service_warning('The name query service is unavailable at this moment')
+
+        return warning
 
     @api.onchange('vat')
     def onchange_vat(self):
         if self.vat:
-            self.definir_informacion(self.vat)
+            return self.definir_informacion(self.vat)

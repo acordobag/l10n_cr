@@ -34,11 +34,18 @@ class ResConfigSettings(models.TransientModel):
     def get_values(self):
         res = super().get_values()
         get_param = self.env['ir.config_parameter'].sudo().get_param
+
+        def as_int(value):
+            try:
+                return int(value or 0)
+            except (TypeError, ValueError):
+                return 0
+
         res.update(
-            expense_account_id=int(get_param('expense_account_id')),
-            load_lines=get_param('load_lines'),
-            expense_product_id=int(get_param('expense_product_id')),
-            expense_analytic_account_id=int(get_param('expense_analytic_account_id')),
+            expense_account_id=as_int(get_param('expense_account_id')),
+            load_lines=get_param('load_lines') in (True, 'True', 'true', '1'),
+            expense_product_id=as_int(get_param('expense_product_id')),
+            expense_analytic_account_id=as_int(get_param('expense_analytic_account_id')),
         )
         return res
 

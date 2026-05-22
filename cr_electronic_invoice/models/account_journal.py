@@ -60,18 +60,6 @@ class AccountJournalInherit(models.Model):
             _logger.exception('FECR: ERROR Importing invoice %s', e)
             # return False
             raise UserError(_("This XML file is not XML-compliant. Error: %s") % e)
-        # attachment.write({'res_model': 'mail.compose.message'})
-
-        # decoders = self.env['account.move']._get_create_invoice_from_attachment_decoders()
-        # invoice = False
-        #         # for decoder in sorted(decoders, key=lambda d: d[0]):
-        #         #     invoice = decoder[1](attachment)
-        #         #     if invoice:
-        #         #         break
-        #         # if not invoice:
-        # Keep this fix limited to the XML import path only.
-        # The imported supplier XML must be created with a purchase move type
-        # and with the same purchase journal that called create_invoice_from_attachment().
         if self.type != 'purchase':
             raise UserError(_(
                 "El XML de proveedor debe importarse desde un diario de compras. "
@@ -94,19 +82,12 @@ class AccountJournalInherit(models.Model):
 
         return invoice
 
-    def create_invoice_from_attachment(self, attachment_ids=[]):
-        # [W0102(dangerous-default-value), AccountJournalInherit.create_invoice_from_attachment]
-        # Dangerous default value [] as argument
-        # Method defined by Odoo
-
-        """Create the invoices from files.
-        :return: A action redirecting to account.move tree/form view.
-        """
+    def _create_document_from_attachment(self, attachment_ids):
+        """Create vendor bills from attachments, keeping Costa Rican XML support."""
         attachments = self.env['ir.attachment'].browse(attachment_ids)
         if not attachments:
             raise UserError(_("No attachment was provided"))
         invoices = self.env['account.move']
-        index = 0
         for attachment in attachments:
 
             if ".xml" in attachment.name or ".XML" in attachment.name:
@@ -120,32 +101,11 @@ class AccountJournalInherit(models.Model):
                 if invoice:
                     invoices += invoice
             else:
-                attachment.write({'res_model': 'mail.compose.message'})
-                decoders = self.env['account.move']._get_create_invoice_from_attachment_decoders()
-                invoice = False
-                for decoder in sorted(decoders, key=lambda d: d[0]):
-                    invoice = decoder[1](attachment)
-                    if invoice:
-                        break
-                if not invoice:
-                    invoice = self.env['account.move'].create({})
-                invoice.with_context(no_new_invoice=True).message_post(attachment_ids=[attachment.id])
-                invoices += invoice
-            index += 1
-        action_vals = {
-            'name': _('Generated Documents'),
-            'domain': [('id', 'in', invoices.ids)],
-            'res_model': 'account.move',
-            'views': [[False, "tree"], [False, "form"]],
-            'type': 'ir.actions.act_window',
-            'context': self._context
-        }
-
+                invoices += self.env['account.move'].with_context(
+                    default_journal_id=self.id,
+                    default_move_type='in_invoice',
+                )._create_records_from_attachments(attachment)
         if len(invoices) == 0:
             raise UserError("There was no invoice to process.")
 
-        if len(invoices) == 1:
-            action_vals.update({'res_id': invoices[0].id, 'view_mode': 'form'})
-        else:
-            action_vals['view_mode'] = 'tree,form'
-        return action_vals
+        return invoices
