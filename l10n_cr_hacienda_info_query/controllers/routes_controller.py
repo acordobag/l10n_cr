@@ -13,12 +13,15 @@ class ActualizarPosApi(http.Controller):
         set_param = request.env['ir.config_parameter'].sudo().set_param
         get_param = request.env['ir.config_parameter'].sudo().get_param
 
+        def get_config(key):
+            return get_param(f'l10n_cr_hacienda_info_query.{key}') or get_param(key)
+
         all_emails_yo_contribuyo = ''
         
-        url_base = get_param('url_base')
-        url_base_yo_contribuyo = get_param('url_base_yo_contribuyo')
-        usuario_yo_contribuyo = get_param('usuario_yo_contribuyo')
-        token_yo_contribuyo = get_param('token_yo_contribuyo')
+        url_base = get_config('url_base')
+        url_base_yo_contribuyo = get_config('url_base_yo_contribuyo')
+        usuario_yo_contribuyo = get_config('usuario_yo_contribuyo')
+        token_yo_contribuyo = get_config('token_yo_contribuyo')
 
         if url_base_yo_contribuyo and usuario_yo_contribuyo and token_yo_contribuyo:
             url_base_yo_contribuyo = url_base_yo_contribuyo.strip()
@@ -53,7 +56,7 @@ class ActualizarPosApi(http.Controller):
             ultimo_mensaje = 'Fecha/Hora: ' + str(datetime.now()) + \
                              ', Codigo: ' + str(peticion.status_code) + \
                              ', Mensaje: ' + str(peticion._content.decode())
-            set_param('ultima_respuesta', ultimo_mensaje)
+            set_param('l10n_cr_hacienda_info_query.ultima_respuesta', ultimo_mensaje)
             # Respuesta de la API
             if peticion.status_code in (200, 202) and len(peticion._content) > 0:
                 contenido = json.loads(str(peticion._content, 'utf-8'))

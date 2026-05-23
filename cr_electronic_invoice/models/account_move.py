@@ -582,14 +582,19 @@ class AccountInvoiceElectronic(models.Model):
                 ]
                 return Account.search(domain, limit=1)
 
+            get_param = self.env['ir.config_parameter'].sudo().get_param
+
+            def get_fecr_config(key):
+                return get_param(f'cr_electronic_invoice.{key}') or get_param(key)
+
             default_account_id = purchase_journal.expense_account_id.id
 
             if default_account_id:
                 account = _find_company_account(default_account_id)
                 load_lines = purchase_journal.load_lines
             else:
-                default_account_id = self.env['ir.config_parameter'].sudo().get_param('expense_account_id')
-                load_lines = self.env['ir.config_parameter'].sudo().get_param('load_lines') in (True, 'True', 'true', '1')
+                default_account_id = get_fecr_config('expense_account_id')
+                load_lines = get_fecr_config('load_lines') in (True, 'True', 'true', '1')
                 if default_account_id:
                     account = _find_company_account(default_account_id)
             analytic_account_id = purchase_journal.expense_analytic_account_id.id
@@ -597,7 +602,7 @@ class AccountInvoiceElectronic(models.Model):
                 analytic_account = self.env['account.analytic.account'].search([('id', '=', analytic_account_id)],
                                                                                limit=1)
             else:
-                analytic_account_id = self.env['ir.config_parameter'].sudo().get_param('expense_analytic_account_id')
+                analytic_account_id = get_fecr_config('expense_analytic_account_id')
                 if analytic_account_id:
                     analytic_account = self.env['account.analytic.account'].search([('id', '=', analytic_account_id)],
                                                                                    limit=1)
@@ -606,7 +611,7 @@ class AccountInvoiceElectronic(models.Model):
             if product_id:
                 product = self.env['product.product'].search([('id', '=', product_id)], limit=1)
             else:
-                product_id = self.env['ir.config_parameter'].sudo().get_param('expense_product_id')
+                product_id = get_fecr_config('expense_product_id')
                 if product_id:
                     product = self.env['product.product'].search([('id', '=', product_id)], limit=1)
 
