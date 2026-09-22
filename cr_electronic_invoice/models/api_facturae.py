@@ -15,7 +15,15 @@ import phonenumbers
 import random
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.serialization import pkcs12 as crypto_pkcs12
+try:
+    # Disponible desde cryptography 36 (dic-2021). Si el servidor tiene una
+    # version mas vieja, esto falla en tiempo de IMPORT del modulo entero y
+    # tumba l10n_cr completo (con todas las bases que aloje ese servidor), no
+    # solo esta funcion -por eso el fallback va aqui, no adentro de un try/
+    # except suelto en cada funcion.
+    from cryptography.hazmat.primitives.serialization import pkcs12 as crypto_pkcs12
+except ImportError:
+    crypto_pkcs12 = None
 from decimal import Decimal, ROUND_HALF_UP
 from odoo import _
 from odoo.exceptions import UserError
@@ -44,21 +52,27 @@ def _pkcs12_password(password):
 def _load_pkcs12_signing_context(ctx, cert, password):
     """Carga la llave y el certificado en el contexto de firma.
 
-    Antes se usaba OpenSSL.crypto.load_pkcs12, que pyOpenSSL 23 marca como
-    obsoleta y la 24.0 elimino. xmlsig ya trabajaba internamente con objetos de
-    cryptography (SignatureContext.load_pkcs12 llamaba a .to_cryptography()),
-    asi que esto fija los mismos tres atributos sin el rodeo por pyOpenSSL.
+    Con cryptography >= 36 usa la API nueva (sin pyOpenSSL, que la 24.0
+    elimino). Si el servidor tiene una cryptography mas vieja sin ese modulo
+    (crypto_pkcs12 es None, ver el import arriba), cae al camino viejo con
+    OpenSSL.crypto.load_pkcs12 + xmlsig.SignatureContext.load_pkcs12, que es
+    el que ya funcionaba antes de este cambio.
     """
-    private_key, certificate, _additional_certificates = crypto_pkcs12.load_key_and_certificates(
-        base64.b64decode(cert),
-        _pkcs12_password(password),
-    )
-    if not private_key or not certificate:
-        raise UserError(_("The cryptographic key does not contain a private key and certificate."))
+    if crypto_pkcs12 is not None:
+        private_key, certificate, _additional_certificates = crypto_pkcs12.load_key_and_certificates(
+            base64.b64decode(cert),
+            _pkcs12_password(password),
+        )
+        if not private_key or not certificate:
+            raise UserError(_("The cryptographic key does not contain a private key and certificate."))
 
-    ctx.x509 = certificate
-    ctx.public_key = certificate.public_key()
-    ctx.private_key = private_key
+        ctx.x509 = certificate
+        ctx.public_key = certificate.public_key()
+        ctx.private_key = private_key
+        return
+
+    certificate = crypto.load_pkcs12(base64.b64decode(cert), password)
+    ctx.load_pkcs12(certificate)
 
 
 def sign_xml(cert, password, xml, policy_id='https://www.hacienda.go.cr/ATV/ComprobanteElectronico/docs/esquemas/'
@@ -1367,18 +1381,30 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
 
 
 def p12_expiration_date(p12file, password):
+    if crypto_pkcs12 is not None:
+        try:
+            _private_key, cert, _additional_certs = crypto_pkcs12.load_key_and_certificates(
+                base64.b64decode(p12file),
+                _pkcs12_password(password),
+            )
+            if not cert:
+                raise UserError(_("The cryptographic key does not contain a certificate."))
+            # cryptography 42 renombro not_valid_after a not_valid_after_utc; se
+            # devuelve sin tzinfo porque los Datetime de Odoo son UTC naive.
+            expiration_date = getattr(cert, 'not_valid_after_utc', None) or cert.not_valid_after
+            return expiration_date.replace(tzinfo=None)
+        except (ValueError, crypto.Error) as crypte:
+            exc_str = str(crypte)
+            if exc_str.find('mac verify failure'):
+                raise
+            raise
+
     try:
-        _private_key, cert, _additional_certs = crypto_pkcs12.load_key_and_certificates(
-            base64.b64decode(p12file),
-            _pkcs12_password(password),
-        )
-        if not cert:
-            raise UserError(_("The cryptographic key does not contain a certificate."))
-        # cryptography 42 renombro not_valid_after a not_valid_after_utc; se
-        # devuelve sin tzinfo porque los Datetime de Odoo son UTC naive.
-        expiration_date = getattr(cert, 'not_valid_after_utc', None) or cert.not_valid_after
-        return expiration_date.replace(tzinfo=None)
-    except (ValueError, crypto.Error) as crypte:
+        pkcs12 = crypto.load_pkcs12(base64.b64decode(p12file), password)
+        data = crypto.dump_certificate(crypto.FILETYPE_PEM, pkcs12.get_certificate())
+        cert = x509.load_pem_x509_certificate(data, default_backend())
+        return cert.not_valid_after
+    except crypto.Error as crypte:
         exc_str = str(crypte)
         if exc_str.find('mac verify failure'):
             raise
