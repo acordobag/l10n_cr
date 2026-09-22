@@ -1,4 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_cr_iva_report_d150_wizard,cr.iva.report.d150.wizard,model_cr_iva_report_d150_wizard,account.group_account_invoice,1,1,1,1
-access_cr_iva_report_d150_line,cr.iva.report.d150.line,model_cr_iva_report_d150_line,account.group_account_invoice,1,1,1,1
-access_cr_iva_report_d150_warning,cr.iva.report.d150.warning,model_cr_iva_report_d150_warning,account.group_account_invoice,1,1,1,1
