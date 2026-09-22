@@ -1885,6 +1885,70 @@ class AccountInvoiceElectronic(models.Model):
                     '\n- '.join(errors)
                 )
 
+    def _validate_fec_before_post(self):
+        """En una FEC el Emisor del XML es el proveedor: sus datos son obligatorios.
+
+        Portado de v19 (ahi se llama antes de action_post para dar un error
+        temprano y claro, en vez de dejar que la factura falle mas adelante
+        con un mensaje generico). No se agregan aqui exigencias nuevas que
+        v14 no tuviera ya en otro punto (economic_activity_id, FEC_sequence_id):
+        esta funcion solo adelanta esas mismas validaciones con mas detalle.
+        """
+        for inv in self:
+            if inv.move_type != 'in_invoice' or inv.tipo_documento != 'FEC':
+                continue
+
+            errors = []
+            partner = inv.partner_id
+            if not partner:
+                errors.append(_('Seleccione un proveedor.'))
+            else:
+                if not partner.identification_id:
+                    errors.append(_('Proveedor "%s": seleccione el tipo de identificacion.')
+                                  % partner.display_name)
+                if not partner.vat:
+                    errors.append(_('Proveedor "%s": ingrese la identificacion.') % partner.display_name)
+                if not partner.country_id:
+                    errors.append(_('Proveedor "%s": seleccione el pais.') % partner.display_name)
+                elif partner.country_id.code != 'CR':
+                    errors.append(_('Proveedor "%s": la factura electronica de compra solo aplica '
+                                    'a proveedores de Costa Rica.') % partner.display_name)
+
+                missing_address = []
+                for field_name, label in (('state_id', _('provincia')),
+                                          ('county_id', _('canton')),
+                                          ('district_id', _('distrito'))):
+                    if not partner[field_name]:
+                        missing_address.append(label)
+                if missing_address:
+                    errors.append(_('Proveedor "%s": complete la direccion (%s).')
+                                  % (partner.display_name, ', '.join(missing_address)))
+
+                if not (inv.economic_activity_id or partner.activity_id):
+                    errors.append(_('Proveedor "%s": seleccione la actividad economica.')
+                                  % partner.display_name)
+
+            if not inv.company_id.FEC_sequence_id:
+                errors.append(_('Compania "%s": configure la secuencia de factura electronica '
+                                'de compra.') % inv.company_id.display_name)
+
+            for line in inv.invoice_line_ids:
+                if line.display_type in ('line_section', 'line_note'):
+                    continue
+                product = line.product_id
+                cabys_code = (product.cabys_code or product.categ_id.cabys_code or '').strip() if product else ''
+                if not cabys_code:
+                    line_name = product.display_name if product else (line.name or line.display_name)
+                    errors.append(_('Linea "%s": seleccione un producto con codigo CAByS o '
+                                    'configure el CAByS en su categoria.') % line_name)
+
+            if errors:
+                raise UserError(
+                    _('No se puede confirmar la factura electronica de compra. Corrija lo '
+                      'siguiente:\n- %s\n\nSi esta factura no debe emitirse como FEC, '
+                      'cambie el tipo de documento.') % '\n- '.join(errors)
+                )
+
     def action_post(self):
         # Revisamos si el ambiente para Hacienda está habilitado
         for inv in self:
@@ -1898,6 +1962,8 @@ class AccountInvoiceElectronic(models.Model):
                 inv._validate_electronic_invoice_issuer_before_post()
                 if inv.move_type == 'out_invoice' and inv.tipo_documento == 'FE':
                     inv._validate_out_invoice_cabys_before_post()
+                if inv.move_type == 'in_invoice' and inv.tipo_documento == 'FEC':
+                    inv._validate_fec_before_post()
 
             # self._onchange_partner_id(validate_payment=False)
 
