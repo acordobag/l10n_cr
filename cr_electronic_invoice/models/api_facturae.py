@@ -712,16 +712,23 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
             sb.append('<SubTotal>' + str(v['subtotal']) + '</SubTotal>')
 
             # === CAMBIO v4.4: estos dos van ANTES de <Impuesto> y a NIVEL DE LÍNEA ===
-            # IVACobradoFabrica (opcional)
-            if v.get('iva_cobrado_fabrica') is not None:
-                sb.append('<IVACobradoFabrica>' + _fmt(v['iva_cobrado_fabrica']) + '</IVACobradoFabrica>')
+            # Solo para FE domestica: en el XSD de FacturaElectronicaExportacion
+            # v4.4 esta linea NO tiene IVACobradoFabrica ni BaseImponible -Hacienda
+            # rechaza un FEE que las traiga con cvc-complex-type.2.4.a-. Verificado
+            # contra v19 (mismo comentario ahi) y contra el rechazo real de
+            # Hacienda a la primera factura de exportacion de esta empresa
+            # (22/09/2026).
+            if inv.tipo_documento != 'FEE':
+                # IVACobradoFabrica (opcional)
+                if v.get('iva_cobrado_fabrica') is not None:
+                    sb.append('<IVACobradoFabrica>' + _fmt(v['iva_cobrado_fabrica']) + '</IVACobradoFabrica>')
 
-            # BaseImponible de la línea (OBLIGATORIO en 4.4) – antes de cualquier <Impuesto>
-            base_imponible_linea = v.get('base_imponible')
-            if base_imponible_linea is None:
-                base_imponible_linea = float(v['cantidad']) * float(v['precioUnitario']) - float(
-                    v.get('montoDescuento', 0.0))
-            sb.append('<BaseImponible>' + _fmt(base_imponible_linea) + '</BaseImponible>')
+                # BaseImponible de la línea (OBLIGATORIO en 4.4 para FE) – antes de cualquier <Impuesto>
+                base_imponible_linea = v.get('base_imponible')
+                if base_imponible_linea is None:
+                    base_imponible_linea = float(v['cantidad']) * float(v['precioUnitario']) - float(
+                        v.get('montoDescuento', 0.0))
+                sb.append('<BaseImponible>' + _fmt(base_imponible_linea) + '</BaseImponible>')
             # === FIN CAMBIO ===
             valor_asumido = v.get('impuesto_asumido_fab')
             # Impuesto por línea (0..n)
@@ -775,12 +782,18 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
                     if valor_asumido is None:
                         desglose_impuesto[k] = float(desglose_impuesto.get(k, 0.0)) + float(b.get('monto') or 0.0)
 
-            if valor_asumido is not None:
+            # ImpuestoAsumidoEmisorFabrica no existe en los esquemas de FEC ni FEE
+            # (verificado en el XSD real de Hacienda, igual que v19). ImpuestoNeto
+            # tampoco existe en FEE; en FEC si aplica, por eso se filtra aparte.
+            if inv.tipo_documento in ('FEE', 'FEC'):
+                pass
+            elif valor_asumido is not None:
                 sb.append('<ImpuestoAsumidoEmisorFabrica>' + _fmt(valor_asumido) + '</ImpuestoAsumidoEmisorFabrica>')
             else:
                 sb.append('<ImpuestoAsumidoEmisorFabrica>0.0</ImpuestoAsumidoEmisorFabrica>')
-            # ImpuestoNeto al final de los impuestos de la línea
-            sb.append('<ImpuestoNeto>' + _fmt(v['impuestoNeto']) + '</ImpuestoNeto>')
+            if inv.tipo_documento != 'FEE':
+                # ImpuestoNeto al final de los impuestos de la línea
+                sb.append('<ImpuestoNeto>' + _fmt(v['impuestoNeto']) + '</ImpuestoNeto>')
             sb.append('<MontoTotalLinea>' + _fmt(v['montoTotalLinea']) + '</MontoTotalLinea>')
             sb.append('</LineaDetalle>')
         sb.append('</DetalleServicio>')
@@ -932,13 +945,60 @@ def send_xml_fe(inv, token, date, xml, tipo_ambiente):
         raise Warning(_('Error enviando el XML al Ministerior de Hacienda'))
 
 
+# tipo_documento -> archivo del esquema real de Hacienda para v4.4. Estos
+# XSD se copiaron del repo v19 (quicknet) el 22/09/2026 porque los que traia
+# este modulo estaban desactualizados -declaraban version="4.3" por dentro
+# aunque el nombre de archivo dijera V4.4-, y esa desactualizacion no se
+# notaba porque nada los usaba para validar antes de enviar.
+XSD_POR_TIPO_DOCUMENTO_V44 = {
+    'FE': 'FacturaElectronica_V4.4.xsd',
+    'TE': 'TiqueteElectronico_V4.4.xsd',
+    'NC': 'NotaCreditoElectronica_V4.4.xsd',
+    'ND': 'NotaDebitoElectronica_V4.4.xsd',
+    'FEE': 'FacturaElectronicaExportacion_V4.4.xsd',
+    'FEC': 'FacturaElectronicaCompra_V4.4.xsd',
+}
+
+
+def _xsd_path_v44(xsd_file):
+    return os.path.join(os.path.dirname(__file__), '..', 'data', 'xsd-4.4', xsd_file)
+
+
 def schema_validator(xml_file, xsd_file) -> bool:
-    """ verifies a xml """
-    xmlschema = etree.XMLSchema(etree.parse(os.path.join(os.path.dirname(__file__), "xsd/" + xsd_file)))
+    """Compatibilidad hacia atras: valida un XML en base64 (sin usar)."""
+    xmlschema = etree.XMLSchema(etree.parse(_xsd_path_v44(xsd_file)))
     xml_doc = base64decode(xml_file)
     root = etree.fromstring(xml_doc, etree.XMLParser(remove_blank_text=True))
-    result = xmlschema.validate(root)
-    return result
+    return xmlschema.validate(root)
+
+
+def validar_contra_esquema_hacienda(tipo_documento, xml_firmado):
+    """Valida el XML YA FIRMADO contra el XSD real de Hacienda antes de
+    enviarlo, para no gastar un envio real (y un consecutivo real) en un
+    error que se puede detectar localmente. xml_firmado puede ser bytes o
+    str; se acepta ambos porque sign_xml devuelve bytes.
+
+    Devuelve None si valida bien, o el texto del primer error si no -para
+    que quien llame decida si bloquea el envio o solo lo registra-.
+    """
+    xsd_file = XSD_POR_TIPO_DOCUMENTO_V44.get(tipo_documento)
+    if not xsd_file:
+        return None  # no hay esquema mapeado para este tipo, no se valida
+
+    try:
+        xmlschema = etree.XMLSchema(etree.parse(_xsd_path_v44(xsd_file)))
+        doc_bytes = xml_firmado if isinstance(xml_firmado, bytes) else xml_firmado.encode('utf-8')
+        root = etree.fromstring(doc_bytes)
+        if xmlschema.validate(root):
+            return None
+        primer_error = xmlschema.error_log[0]
+        return '%s (linea %s)' % (primer_error.message, primer_error.line)
+    except Exception as e:
+        # Si la validacion local falla por algo ajeno al XML (esquema
+        # corrupto, etc.), no se bloquea el envio real: se registra y sigue.
+        _logger.warning('E-INV CR - No se pudo validar localmente contra el '
+                        'esquema de Hacienda: %s', e)
+        return None
 
 
 # Obtener Attachments para las Facturas Electrónicas

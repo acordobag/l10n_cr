@@ -1483,6 +1483,19 @@ class AccountInvoiceElectronic(models.Model):
                         inv.company_id.frm_pin,
                         xml_to_sign)
 
+                    # Se valida localmente contra el XSD real de Hacienda antes
+                    # de gastar un envio -y un consecutivo real- en un documento
+                    # que se sabe de antemano que va a rechazar. No reemplaza la
+                    # validacion de Hacienda (su copia del esquema es la que
+                    # manda), solo evita el viaje redondo cuando el error es
+                    # detectable aqui mismo.
+                    error_local = api_facturae.validar_contra_esquema_hacienda(
+                        inv.tipo_documento, xml_firmado)
+                    if error_local:
+                        raise UserError(_(
+                            'El XML no pasa la validacion local contra el esquema de '
+                            'Hacienda (%s): %s') % (inv.tipo_documento, error_local))
+
                     # inv.xml_comprobante = base64.encodestring(xml_firmado)
                     inv.fname_xml_comprobante = inv.tipo_documento + '_' + inv.number_electronic + '.xml'
                     self.env['ir.attachment'].sudo().create({'name': inv.fname_xml_comprobante,
