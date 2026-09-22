@@ -603,11 +603,34 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
         else:
             id_code = receiver_company.identification_id.code
 
+        # Igual que v19 (quicknet): un FEE/NC a un receptor no domiciliado
+        # siempre debe llevar codigo '05', sin depender de si alguien
+        # configuro identification_id en el contacto.
+        if inv.tipo_documento in ('FEE', 'NC') and (
+                not receiver_company.country_id or receiver_company.country_id.code != 'CR'):
+            id_code = '05'
+
         if receiver_company.name:
             sb.append('<Receptor>')
             sb.append('<Nombre>' + escape(str(receiver_company.name[:99])) + '</Nombre>')
 
-            if inv.tipo_documento == 'FEE' or id_code == '05':
+            if inv.tipo_documento in ('FEE', 'NC') and id_code == '05':
+                # El esquema 2024 de Hacienda para Factura de Exportacion NO
+                # trae IdentificacionExtranjero en este punto -lo rechaza con
+                # cvc-complex-type.2.4.a-, usa la misma Identificacion que un
+                # documento nacional, con Tipo '05'. Verificado contra v19 y
+                # contra la respuesta real de Hacienda (rechazo del 22/09/2026
+                # a la primera factura de exportacion de esta empresa).
+                if not receiver_company.vat:
+                    raise UserError(_('Los documentos de exportacion requieren un numero de '
+                                       'identificacion del receptor (vat). Configure uno en el '
+                                       'contacto antes de enviar.'))
+                receiver_number = receiver_company.vat.strip()
+                sb.append('<Identificacion>')
+                sb.append('<Tipo>' + id_code + '</Tipo>')
+                sb.append('<Numero>' + escape(str(receiver_number[:20])) + '</Numero>')
+                sb.append('</Identificacion>')
+            elif id_code == '05':
                 if receiver_company.vat:
                     sb.append('<IdentificacionExtranjero>' + receiver_company.vat + '</IdentificacionExtranjero>')
             else:
