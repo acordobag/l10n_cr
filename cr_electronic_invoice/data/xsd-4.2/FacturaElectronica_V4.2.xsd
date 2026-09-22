@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <xs:schema xmlns="https://www.hacienda.go.cr/ATV/docs/esquemas/2016/v4.2/facturaElectronica" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:vc="http://www.w3.org/2007/XMLSchema-versioning" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" targetNamespace="https://www.hacienda.go.cr/ATV/docs/esquemas/2016/v4.2/facturaElectronica" elementFormDefault="qualified" attributeFormDefault="unqualified" version="4.2" vc:minVersion="1.1">
 	<!--xs:import namespace="http://www.w3.org/2000/09/xmldsig#" schemaLocation="http://www.w3.org/TR/2008/REC-xmldsig-core-20080610/xmldsig-core-schema.xsd"/-->
-	<xs:import namespace="http://www.w3.org/2000/09/xmldsig#" schemaLocation="/opt/ambientes/Odoo10/MyAddons/base_fe_cr/data/xsd-4.2/xmldsig-core-schema.xsd"/>
+	<xs:import namespace="http://www.w3.org/2000/09/xmldsig#" schemaLocation="xmldsig-core-schema.xsd"/>
 	<xs:element name="FacturaElectronica">
 		<xs:annotation>
 			<xs:documentation>Elemento Raiz de la Facturacion Electrónica</xs:documentation>
