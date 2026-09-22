@@ -1752,6 +1752,139 @@ class AccountInvoiceElectronic(models.Model):
 
         return (tipo_documento, sequence)
 
+    # ==================================================================
+    # Validaciones previas a confirmar (portado de v19, quicknet)
+    # ==================================================================
+    #
+    # Antes de esta noche, un dato incompleto (CABYS faltante, correo del
+    # cliente mal formado, direccion incompleta) se descubria hasta que
+    # Hacienda rechazaba el envio -o peor, se quedaba en un estado raro a
+    # medias-. Esto lo corta ANTES de confirmar, con un mensaje que dice
+    # exactamente que falta, en vez de dejar que reviente mas adelante en el
+    # armado del XML o en la respuesta de Hacienda.
+
+    def _has_electronic_invoice_configuration(self):
+        """La compania tiene todo lo necesario para facturar electronicamente."""
+        self.ensure_one()
+        company = self.company_id
+        return bool(
+            company.frm_ws_ambiente != 'disabled'
+            and company.identification_id
+            and company.frm_ws_identificador
+            and company.frm_ws_password
+            and company.signature
+            and company.frm_pin
+        )
+
+    def _validate_electronic_invoice_issuer_before_post(self):
+        """El emisor (nuestra compania) tiene los datos que Hacienda exige."""
+        email_regex = r'^(\s?[^\s,]+@[^\s,]+\.[^\s,]+\s?,)*(\s?[^\s,]+@[^\s,]+\.[^\s,]+)$'
+        for inv in self:
+            if inv.tipo_documento == 'disabled' or not inv._has_electronic_invoice_configuration():
+                continue
+            if inv.move_type not in ('out_invoice', 'out_refund'):
+                continue
+
+            errors = []
+            company = inv.company_id
+            if not company:
+                errors.append(_('Seleccione una compania emisora.'))
+            else:
+                if not company.identification_id:
+                    errors.append(_('Emisor "%s": seleccione el tipo de identificacion.') % company.display_name)
+                if not company.vat:
+                    errors.append(_('Emisor "%s": ingrese la identificacion.') % company.display_name)
+                if not company.email:
+                    errors.append(_('Emisor "%s": ingrese el correo electronico.') % company.display_name)
+                elif not re.match(email_regex, company.email.lower()):
+                    errors.append(_('Emisor "%s": el correo electronico no cumple con una '
+                                    'estructura valida.') % company.display_name)
+
+                # barrio y otras senas se dejan fuera de lo obligatorio: en
+                # api_facturae.py el XML real los trata como opcionales (Barrio
+                # solo se agrega si neighborhood_id.code existe; OtrasSenas cae a
+                # 'NA' si street esta vacio). Esta empresa lleva meses facturando
+                # sin barrio configurado y Hacienda lo acepta -exigirlo aqui
+                # bloquearia todas las facturas sin agregar nada real.
+                missing_address = []
+                address_fields = [
+                    ('country_id', _('pais')),
+                    ('state_id', _('provincia')),
+                    ('county_id', _('canton')),
+                    ('district_id', _('distrito')),
+                ]
+                for field_name, label in address_fields:
+                    if field_name in company._fields and not company[field_name]:
+                        missing_address.append(label)
+                if missing_address:
+                    errors.append(_('Emisor "%s": complete la direccion (%s).') %
+                                  (company.display_name, ', '.join(missing_address)))
+
+            if errors:
+                raise UserError(
+                    _('No se puede confirmar el documento electronico. Corrija lo '
+                      'siguiente:\n- %s') % '\n- '.join(errors)
+                )
+
+    def _validate_out_invoice_cabys_before_post(self):
+        """El cliente y cada linea traen lo que una FE domestica necesita.
+
+        Solo se llama para tipo_documento == 'FE' (ver action_post): una FEE
+        de exportacion no tiene por que traer provincia/canton/distrito/
+        barrio de un cliente en el extranjero -el generador de XML ya omite
+        esa seccion (<Ubicacion>) para FEE-, asi que exigirla aqui tumbaria
+        cualquier factura de exportacion. No se toca esa condicion.
+        """
+        for inv in self:
+            if inv.move_type != 'out_invoice' or inv.tipo_documento == 'disabled':
+                continue
+
+            errors = []
+            partner = inv.partner_id
+            if not partner:
+                errors.append(_('Seleccione un cliente.'))
+            else:
+                if not partner.identification_id:
+                    errors.append(_('Cliente "%s": seleccione el tipo de identificacion.') %
+                                  partner.display_name)
+                if not partner.vat:
+                    errors.append(_('Cliente "%s": ingrese la identificacion.') % partner.display_name)
+                if not partner.email:
+                    errors.append(_('Cliente "%s": ingrese el correo electronico.') % partner.display_name)
+                elif not re.match(r'^(\s?[^\s,]+@[^\s,]+\.[^\s,]+\s?,)*(\s?[^\s,]+@[^\s,]+\.[^\s,]+)$',
+                                  partner.email.lower()):
+                    errors.append(_('Cliente "%s": el correo electronico no cumple con una '
+                                    'estructura valida.') % partner.display_name)
+
+                # No se exige direccion del cliente: en api_facturae.py el bloque
+                # <Ubicacion> del receptor es todo-o-nada (solo se agrega si
+                # state_id, county_id, district_id y neighborhood_id estan TODOS
+                # presentes; si falta cualquiera, se omite el bloque completo sin
+                # error). Hay clientes reales, con facturas aceptadas desde hace
+                # meses, sin esos datos -exigirlos aqui bloquearia facturas que
+                # hoy funcionan bien.
+
+            for line in inv.invoice_line_ids:
+                if line.display_type in ('line_section', 'line_note'):
+                    continue
+                product = line.product_id
+                cabys_code = ''
+                if product:
+                    cabys_code = (product.cabys_code or product.categ_id.cabys_code or '').strip()
+                if not cabys_code:
+                    line_name = product.display_name if product else (line.name or line.display_name)
+                    errors.append(_('Linea "%s": seleccione un producto con codigo CAByS o '
+                                    'configure el CAByS en su categoria.') % line_name)
+                if not line.tax_ids:
+                    line_name = product.display_name if product else (line.name or line.display_name)
+                    errors.append(_('Linea "%s": seleccione al menos un impuesto.') % line_name)
+
+            if errors:
+                raise UserError(
+                    _('No se puede confirmar la factura electronica. Corrija lo siguiente:\n- %s') %
+                    '\n- '.join(errors)
+                )
+
     def action_post(self):
         # Revisamos si el ambiente para Hacienda está habilitado
         for inv in self:
@@ -1760,6 +1893,11 @@ class AccountInvoiceElectronic(models.Model):
                 super(AccountInvoiceElectronic, inv).action_post()
                 inv.tipo_documento = 'disabled'
                 continue
+
+            if inv._has_electronic_invoice_configuration():
+                inv._validate_electronic_invoice_issuer_before_post()
+                if inv.move_type == 'out_invoice' and inv.tipo_documento == 'FE':
+                    inv._validate_out_invoice_cabys_before_post()
 
             # self._onchange_partner_id(validate_payment=False)
 
