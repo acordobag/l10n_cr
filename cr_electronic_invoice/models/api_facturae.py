@@ -1037,15 +1037,8 @@ def consulta_documentos(self, inv, env, token_m_h, date_cr, xml_firmado):
                                                      'mimetype': 'text/xml'})
 
     if (estado_m_h in ['aceptado', 'rechazado']) or (inv.move_type in ['out_invoice', 'out_refund']):
-        inv.fname_xml_respuesta_tributacion = 'AHC_' + inv.number_electronic + '.xml'
-        self.env['ir.attachment'].sudo().create({'name': inv.fname_xml_respuesta_tributacion,
-                                          'type': 'binary',
-                                          'datas': response_json.get('respuesta-xml'),
-                                          'res_model': inv._name,
-                                          'res_id': inv.id,
-                                          'res_field': 'xml_respuesta_tributacion',
-                                          'res_name': inv.fname_xml_respuesta_tributacion,
-                                          'mimetype': 'text/xml'})
+        if not inv._store_hacienda_response_xml(response_json.get('respuesta-xml')):
+            inv.state_tributacion = 'procesando'
 
     if inv.tipo_documento != 'FEC' and estado_m_h == 'aceptado' and (not last_state or last_state == 'procesando'):
         if inv.move_type in ['in_invoice', 'in_refund']:

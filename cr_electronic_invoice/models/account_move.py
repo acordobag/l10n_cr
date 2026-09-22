@@ -111,6 +111,37 @@ class InvoiceLineElectronic(models.Model):
 class AccountInvoiceElectronic(models.Model):
     _inherit = "account.move"
 
+    def _store_hacienda_response_xml(self, response_xml, filename=None):
+        """Store Hacienda's XML response without empty or duplicate attachments."""
+        self.ensure_one()
+        if not response_xml:
+            _logger.warning(
+                'E-INV CR - Hacienda returned no response XML for document %s',
+                self.number_electronic)
+            return False
+
+        filename = filename or 'AHC_' + self.number_electronic + '.xml'
+        self.fname_xml_respuesta_tributacion = filename
+        attachment_vals = {
+            'name': filename,
+            'type': 'binary',
+            'datas': response_xml,
+            'res_model': self._name,
+            'res_id': self.id,
+            'res_field': 'xml_respuesta_tributacion',
+            'res_name': filename,
+            'mimetype': 'text/xml',
+        }
+        attachments = self.env['ir.attachment'].sudo().search([
+            ('res_model', '=', self._name),
+            ('res_id', '=', self.id),
+            ('res_field', '=', 'xml_respuesta_tributacion'),
+        ])
+        if attachments:
+            attachments.write(attachment_vals)
+            return attachments[0]
+        return self.env['ir.attachment'].sudo().create(attachment_vals)
+
     number_electronic = fields.Char(string="Electronic number", copy=False, index=True)
     date_issuance = fields.Char(string="Date of issue", copy=False)
     consecutive_number_receiver = fields.Char(string="Consecutive Receiver Number",
@@ -780,19 +811,11 @@ class AccountInvoiceElectronic(models.Model):
                                         inv.state_tributacion = response_json.get(
                                             'ind-estado')
                                         # inv.xml_respuesta_tributacion = response_json.get('respuesta-xml')
-                                        inv.fname_xml_respuesta_tributacion = 'ACH_' + \
-                                                                              inv.number_electronic + '-' + \
-                                                                              inv.consecutive_number_receiver + '.xml'
-                                        # file_name used to avoid: E501 line too long
-                                        file_name = inv.fname_xml_respuesta_tributacion
-                                        self.env['ir.attachment'].create({'name': file_name,
-                                                                          'type': 'binary',
-                                                                          'datas': response_json.get('respuesta-xml'),
-                                                                          'res_model': self._name,
-                                                                          'res_id': inv.id,
-                                                                          'res_field': 'xml_respuesta_tributacion',
-                                                                          'res_name': file_name,
-                                                                          'mimetype': 'text/xml'})
+                                        file_name = 'ACH_' + inv.number_electronic + '-' + \
+                                                    inv.consecutive_number_receiver + '.xml'
+                                        if not inv._store_hacienda_response_xml(
+                                                response_json.get('respuesta-xml'), file_name):
+                                            inv.state_tributacion = 'procesando'
 
                                         _logger.error(
                                             'E-INV CR - Estado Documento:%s',
@@ -890,15 +913,9 @@ class AccountInvoiceElectronic(models.Model):
                 i.state_tributacion = estado_m_h
 
                 if estado_m_h == 'aceptado':
-                    i.fname_xml_respuesta_tributacion = 'AHC_' + i.number_electronic + '.xml'
-                    self.env['ir.attachment'].create({'name': i.fname_xml_respuesta_tributacion,
-                                                      'type': 'binary',
-                                                      'datas': response_json.get('respuesta-xml'),
-                                                      'res_model': i._name,
-                                                      'res_id': i.id,
-                                                      'res_field': 'xml_respuesta_tributacion',
-                                                      'res_name': i.fname_xml_respuesta_tributacion,
-                                                      'mimetype': 'text/xml'})
+                    if not i._store_hacienda_response_xml(response_json.get('respuesta-xml')):
+                        i.state_tributacion = 'procesando'
+                        continue
 
                     if i.tipo_documento != 'FEC' and i.partner_id and i.partner_id.email:
                         email_template = self.env.ref('account.email_template_edi_invoice', False)
@@ -931,17 +948,11 @@ class AccountInvoiceElectronic(models.Model):
 
                 elif estado_m_h in ('firma_invalida'):
                     if i.error_count > 10:
-                        i.fname_xml_respuesta_tributacion = 'AHC_' + i.number_electronic + '.xml'
-                        self.env['ir.attachment'].create({'name': i.fname_xml_respuesta_tributacion,
-                                                          'type': 'binary',
-                                                          'datas': response_json.get('respuesta-xml'),
-                                                          'res_model': i._name,
-                                                          'res_id': i.id,
-                                                          'res_field': 'xml_respuesta_tributacion',
-                                                          'res_name': i.fname_xml_respuesta_tributacion,
-                                                          'mimetype': 'text/xml'})
-                        i.state_email = 'fe_error'
-                        _logger.info(_('email not sent - invoice rejected'))
+                        if i._store_hacienda_response_xml(response_json.get('respuesta-xml')):
+                            i.state_email = 'fe_error'
+                            _logger.info(_('email not sent - invoice rejected'))
+                        else:
+                            i.state_tributacion = 'procesando'
                     else:
                         i.error_count += 1
                         i.state_tributacion = 'procesando'
@@ -949,19 +960,14 @@ class AccountInvoiceElectronic(models.Model):
                 elif estado_m_h == 'rechazado':
                     i.state_email = 'fe_error'
                     i.state_tributacion = estado_m_h
-                    i.fname_xml_respuesta_tributacion = 'AHC_' + i.number_electronic + '.xml'
-                    self.env['ir.attachment'].create({'name': i.fname_xml_respuesta_tributacion,
-                                                      'type': 'binary',
-                                                      'datas': response_json.get('respuesta-xml'),
-                                                      'res_model': self._name,
-                                                      'res_id': i.id,
-                                                      'res_field': 'xml_respuesta_tributacion',
-                                                      'res_name': i.fname_xml_respuesta_tributacion,
-                                                      'mimetype': 'text/xml'})
-                    decoded_xml = base64.b64decode(response_json.get('respuesta-xml')).decode('utf-8')
-                    xml_errors = decoded_xml.partition('<DetalleMensaje>')[2].partition('</DetalleMensaje>')[0]
-                    # _logger.error(xml_errors)
-                    i.message_post(subject='Error', body=xml_errors)
+                    response_xml = response_json.get('respuesta-xml')
+                    if i._store_hacienda_response_xml(response_xml):
+                        decoded_xml = base64.b64decode(response_xml).decode('utf-8')
+                        xml_errors = decoded_xml.partition('<DetalleMensaje>')[2].partition('</DetalleMensaje>')[0]
+                        # _logger.error(xml_errors)
+                        i.message_post(subject='Error', body=xml_errors)
+                    else:
+                        i.state_tributacion = 'procesando'
                 else:
                     if i.error_count > 10:
                         i.state_tributacion = 'error'
