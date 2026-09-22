@@ -1292,37 +1292,44 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
                        'tax_ids': taxes}
             new_lines.append((0, 0, columns))
 
-            # v4.4: Importar OtrosCargos como líneas adicionales sin impuestos.
-            # Estos cargos no vienen dentro de DetalleServicio/LineaDetalle,
-            # pero sí forman parte de ResumenFactura/TotalComprobante.
-            other_charge_nodes = invoice_xml.xpath("inv:OtrosCargos", namespaces=namespaces)
+        # v4.4: Importar OtrosCargos como líneas adicionales sin impuestos.
+        # Estos cargos no vienen dentro de DetalleServicio/LineaDetalle,
+        # pero sí forman parte de ResumenFactura/TotalComprobante.
+        #
+        # CORRECCION: este bloque estaba indentado dentro de "for line in lines",
+        # y como OtrosCargos cuelga del documento (no de la línea), se agregaba
+        # una vez por cada línea de detalle. Una factura con 5 líneas y 439.86
+        # de otros cargos sumaba 5 x 439.86 = 2199.30, y el total no cuadraba
+        # contra TotalComprobante ("La cantidad total no coincide con la
+        # cantidad XML"). Va fuera del bucle: los cargos se agregan una sola vez.
+        other_charge_nodes = invoice_xml.xpath("inv:OtrosCargos", namespaces=namespaces)
 
-            for other_charge_node in other_charge_nodes:
-                amount_node = other_charge_node.xpath("inv:MontoCargo", namespaces=namespaces)
-                if not amount_node:
-                    continue
+        for other_charge_node in other_charge_nodes:
+            amount_node = other_charge_node.xpath("inv:MontoCargo", namespaces=namespaces)
+            if not amount_node:
+                continue
 
-                amount = float(amount_node[0].text or '0.0')
-                if not amount:
-                    continue
+            amount = float(amount_node[0].text or '0.0')
+            if not amount:
+                continue
 
-                detail_node = other_charge_node.xpath("inv:Detalle", namespaces=namespaces)
-                detail = detail_node[0].text if detail_node and detail_node[0].text else _('Otros cargos')
+            detail_node = other_charge_node.xpath("inv:Detalle", namespaces=namespaces)
+            detail = detail_node[0].text if detail_node and detail_node[0].text else _('Otros cargos')
 
-                columns = {
-                    'name': detail,
-                    'move_id': invoice.id,
-                    'price_unit': amount,
-                    'quantity': 1.0,
-                    'sequence': len(new_lines) + 1,
-                    'product_id': False,
-                    'account_id': account_id.id,
-                    'analytic_account_id': analytic_account,
-                    'economic_activity_id': activity_id,
-                    'tax_ids': [(6, 0, [])],
-                }
+            columns = {
+                'name': detail,
+                'move_id': invoice.id,
+                'price_unit': amount,
+                'quantity': 1.0,
+                'sequence': len(new_lines) + 1,
+                'product_id': False,
+                'account_id': account_id.id,
+                'analytic_account_id': analytic_account,
+                'economic_activity_id': activity_id,
+                'tax_ids': [(6, 0, [])],
+            }
 
-                new_lines.append((0, 0, columns))
+            new_lines.append((0, 0, columns))
 
         invoice.invoice_line_ids = new_lines
 
