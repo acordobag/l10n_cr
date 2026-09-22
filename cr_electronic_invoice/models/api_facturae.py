@@ -15,6 +15,7 @@ import phonenumbers
 import random
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.serialization import pkcs12 as crypto_pkcs12
 from decimal import Decimal, ROUND_HALF_UP
 from odoo import _
 from odoo.exceptions import UserError
@@ -34,6 +35,32 @@ except(ImportError, IOError) as err:
 _logger = logging.getLogger(__name__)
 
 
+def _pkcs12_password(password):
+    if isinstance(password, str):
+        return password.encode()
+    return password
+
+
+def _load_pkcs12_signing_context(ctx, cert, password):
+    """Carga la llave y el certificado en el contexto de firma.
+
+    Antes se usaba OpenSSL.crypto.load_pkcs12, que pyOpenSSL 23 marca como
+    obsoleta y la 24.0 elimino. xmlsig ya trabajaba internamente con objetos de
+    cryptography (SignatureContext.load_pkcs12 llamaba a .to_cryptography()),
+    asi que esto fija los mismos tres atributos sin el rodeo por pyOpenSSL.
+    """
+    private_key, certificate, _additional_certificates = crypto_pkcs12.load_key_and_certificates(
+        base64.b64decode(cert),
+        _pkcs12_password(password),
+    )
+    if not private_key or not certificate:
+        raise UserError(_("The cryptographic key does not contain a private key and certificate."))
+
+    ctx.x509 = certificate
+    ctx.public_key = certificate.public_key()
+    ctx.private_key = private_key
+
+
 def sign_xml(cert, password, xml, policy_id='https://www.hacienda.go.cr/ATV/ComprobanteElectronico/docs/esquemas/'
              '2016/v4.2/ResolucionComprobantesElectronicosDGT-R-48-2016_4.2.pdf'):
     root = etree.fromstring(xml)
@@ -44,8 +71,7 @@ def sign_xml(cert, password, xml, policy_id='https://www.hacienda.go.cr/ATV/Comp
 
     root.append(signature)
     ctx = XAdESContext2(policy)
-    certificate = crypto.load_pkcs12(base64.b64decode(cert), password)
-    ctx.load_pkcs12(certificate)
+    _load_pkcs12_signing_context(ctx, cert, password)
     ctx.sign(signature)
 
     return etree.tostring(root, encoding='UTF-8', method='xml', xml_declaration=True, with_tail=False)
@@ -1342,11 +1368,17 @@ def load_xml_data(invoice, load_lines, account_id, product_id=False, analytic_ac
 
 def p12_expiration_date(p12file, password):
     try:
-        pkcs12 = crypto.load_pkcs12(base64.b64decode(p12file), password)
-        data = crypto.dump_certificate(crypto.FILETYPE_PEM, pkcs12.get_certificate())
-        cert = x509.load_pem_x509_certificate(data, default_backend())
-        return cert.not_valid_after
-    except crypto.Error as crypte:
+        _private_key, cert, _additional_certs = crypto_pkcs12.load_key_and_certificates(
+            base64.b64decode(p12file),
+            _pkcs12_password(password),
+        )
+        if not cert:
+            raise UserError(_("The cryptographic key does not contain a certificate."))
+        # cryptography 42 renombro not_valid_after a not_valid_after_utc; se
+        # devuelve sin tzinfo porque los Datetime de Odoo son UTC naive.
+        expiration_date = getattr(cert, 'not_valid_after_utc', None) or cert.not_valid_after
+        return expiration_date.replace(tzinfo=None)
+    except (ValueError, crypto.Error) as crypte:
         exc_str = str(crypte)
         if exc_str.find('mac verify failure'):
             raise
