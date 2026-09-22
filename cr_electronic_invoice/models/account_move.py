@@ -179,6 +179,15 @@ class AccountInvoiceElectronic(models.Model):
 
     electronic_invoice_return_message = fields.Char(string='Hacienda answer', readonly=True)
 
+    # Portado de v19 (quicknet): trazabilidad del reintento de un documento
+    # rechazado/con error. Ver action_retry_rejected_electronic_invoice.
+    fe_retry_origin_id = fields.Many2one('account.move', string='Origen del reintento FE',
+                                         copy=False, readonly=True)
+    fe_retry_new_id = fields.Many2one('account.move', string='Documento nuevo del reintento FE',
+                                      copy=False, readonly=True)
+    fe_retry_reversal_id = fields.Many2one('account.move', string='Reversa interna del reintento FE',
+                                           copy=False, readonly=True)
+
     fname_xml_respuesta_tributacion = fields.Char(string="XML File Name Tributación Response",
                                                   copy=False)
     xml_comprobante = fields.Binary(string="XML voucher", copy=False, attachment=True)
@@ -991,6 +1000,158 @@ class AccountInvoiceElectronic(models.Model):
             for inv in self:
                 token_m_h = api_facturae.get_token_hacienda(inv, inv.company_id.frm_ws_ambiente)
                 api_facturae.consulta_documentos(self, inv, self.company_id.frm_ws_ambiente, token_m_h, False, False)
+
+    # ==================================================================
+    # Reintento de documentos electronicos rechazados/con error
+    # ==================================================================
+    #
+    # Portado de v19 (quicknet, models/account_move.py). Un documento
+    # rechazado ya gasto un Clave real (Hacienda no revalida contenido nuevo
+    # bajo el mismo Clave, ver docs/D150_CAMPOS_OFICIALES.md), asi que
+    # "reintentar" no es reenviar el mismo registro: hay que dejar constancia
+    # contable de que ese documento no sirvio, y crear uno nuevo en borrador
+    # con Clave propia para que el usuario lo revise y confirme.
+    #
+    # Diferencia real con v19 que hubo que resolver aqui: el _reverse_moves
+    # de este modulo (mas abajo en este archivo) llama action_post() sobre la
+    # reversa automaticamente al crearla -v19 no lo hace-. Si esa reversa
+    # llegara a pasar por la logica electronica de action_post, intentaria
+    # sacarle un Clave real a Hacienda para una nota de credito que no debe
+    # existir electronicamente (el documento original nunca fue aceptado).
+    # Se evita marcando la reversa con tipo_documento='disabled' desde su
+    # creacion: action_post ya sabe saltarse toda la logica de Hacienda para
+    # ese caso (es el mismo mecanismo de cr_invoice_disabled_no_consecutive).
+
+    def _get_fe_retry_clean_electronic_values(self):
+        """Campos electronicos a limpiar en la copia/reversa del reintento."""
+        clean_values = {
+            'number_electronic': False,
+            'sequence': False,
+            'state_tributacion': False,
+            'electronic_invoice_return_message': False,
+            'error_count': 0,
+            'xml_comprobante': False,
+            'fname_xml_comprobante': False,
+            'xml_respuesta_tributacion': False,
+            'fname_xml_respuesta_tributacion': False,
+            'date_issuance': False,
+            'amount_tax_electronic_invoice': 0.0,
+            'amount_total_electronic_invoice': 0.0,
+            'amount_total_iva_devuelto': 0.0,
+        }
+        return {name: value for name, value in clean_values.items() if name in self._fields}
+
+    def _cancel_fe_retry_payments(self):
+        """No se puede reintentar con pagos ya conciliados sin revisarlos a mano."""
+        self.ensure_one()
+        statement_lines = self._get_reconciled_statement_lines()
+        if statement_lines:
+            raise UserError(_(
+                'No se puede reintentar el documento electronico porque tiene pagos '
+                'conciliados desde extractos bancarios. Revise o desconcilie esos pagos '
+                'antes de reintentar.'
+            ))
+        for payment in self._get_reconciled_payments():
+            if payment.state == 'cancelled':
+                continue
+            try:
+                payment.action_cancel()
+            except Exception as error:
+                raise UserError(_(
+                    'No se pudo cancelar el pago %(payment)s asociado al documento '
+                    '%(invoice)s.\nDetalle: %(error)s'
+                ) % {
+                    'payment': payment.display_name,
+                    'invoice': self.display_name,
+                    'error': error,
+                }) from error
+
+    def _reverse_fe_retry_accounting(self):
+        """Reversa contable interna del documento rechazado, sin tocar Hacienda.
+
+        tipo_documento='disabled' en los valores por defecto hace que, cuando
+        _reverse_moves confirme esta reversa automaticamente, action_post la
+        trate igual que cualquier comprobante deshabilitado: asiento contable
+        normal, sin pedir Clave ni enviar nada a Hacienda.
+        """
+        self.ensure_one()
+        reversal = self._reverse_moves(default_values_list=[{
+            'date': fields.Date.context_today(self),
+            'ref': _('Reversa interna por reintento de %s') % (self.name or self.sequence or self.number_electronic),
+            'tipo_documento': 'disabled',
+        }], cancel=True)
+        reversal.write({
+            **reversal._get_fe_retry_clean_electronic_values(),
+            'state_tributacion': 'na',
+            'electronic_invoice_return_message': _(
+                'Reversa interna generada por un reintento de documento electronico. '
+                'No se envia a Hacienda: el documento original nunca fue aceptado.'),
+            'fe_retry_origin_id': self.id,
+        })
+        return reversal
+
+    def _copy_for_fe_retry(self, reversal):
+        """Copia limpia del documento rechazado, en borrador, con Clave propia."""
+        self.ensure_one()
+        new_invoice = self.copy({
+            **self._get_fe_retry_clean_electronic_values(),
+            'name': '/',
+            'invoice_id': self.invoice_id.id,
+            'reference_code_id': self.reference_code_id.id,
+            'reference_document_id': self.reference_document_id.id,
+            'fe_retry_origin_id': self.id,
+            'fe_retry_reversal_id': reversal.id,
+            'fe_retry_new_id': False,
+        })
+        return new_invoice
+
+    def action_retry_rejected_electronic_invoice(self):
+        """Boton 'Reintentar': reversa interna + copia nueva en borrador.
+
+        No reenvia nada a Hacienda por si sola -el usuario revisa la copia
+        nueva y la confirma cuando este lista, igual que cualquier factura-.
+        """
+        new_invoices = self.env['account.move']
+        for inv in self:
+            if inv.move_type not in ('out_invoice', 'out_refund') or \
+                    inv.state_tributacion not in ('rechazado', 'error'):
+                raise UserError(_('Solo se pueden reintentar facturas y notas de credito de '
+                                   'cliente rechazadas o con error.'))
+            inv._cancel_fe_retry_payments()
+            reversal = inv._reverse_fe_retry_accounting()
+            new_invoice = inv._copy_for_fe_retry(reversal)
+            inv.write({
+                'fe_retry_new_id': new_invoice.id,
+                'fe_retry_reversal_id': reversal.id,
+            })
+            inv.message_post(body=_(
+                'Documento reintentado. Se creo una reversa interna y un nuevo documento '
+                'en borrador: %s.') % new_invoice.display_name)
+            reversal.message_post(body=_(
+                'Reversa interna generada por el reintento del documento %s.') % inv.display_name)
+            new_invoice.message_post(body=_(
+                'Documento creado en borrador desde el reintento de %s. Revise los datos '
+                '(incluido el numero de identificacion del receptor si es de exportacion) '
+                'y confirme manualmente cuando corresponda.') % inv.display_name)
+            new_invoices |= new_invoice
+
+        if len(new_invoices) == 1:
+            return {
+                'type': 'ir.actions.act_window',
+                'name': _('Documento para reintentar'),
+                'res_model': 'account.move',
+                'view_mode': 'form',
+                'res_id': new_invoices.id,
+                'target': 'current',
+            }
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Documentos para reintentar'),
+            'res_model': 'account.move',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', new_invoices.ids)],
+            'target': 'current',
+        }
 
     @api.model
     def _check_hacienda_for_mrs(self, max_invoices=10):  # cron

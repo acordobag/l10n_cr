@@ -27,6 +27,10 @@
                 Se oculta el botón para utilizar nueva sección para emitir y consultar manualmente
                 <button name="action_check_hacienda" type="object" string="Consultar Hacienda" attrs="{'invisible':['|',('move_type','=','entry'),('state_tributacion','in', ('aceptado', 'rechazado', 'error', 'firma_invalida', 'na', 'ne','',False))]}"/>
             -->
+                <button name="action_retry_rejected_electronic_invoice" type="object"
+                        string="Reintentar" class="btn-warning"
+                        confirm="Se va a crear una reversa interna (no se envia a Hacienda) y un documento nuevo en borrador con Clave propia. El documento actual queda como referencia historica. ¿Continuar?"
+                        attrs="{'invisible': ['|', ('move_type','not in', ('out_invoice','out_refund')), ('state_tributacion','not in', ('rechazado','error'))]}"/>
                 <button name="action_send_mrs_to_hacienda" type="object" string="Send Receiver Message" attrs="{'invisible':['|', ('move_type','not in', ('in_invoice', 'in_refund', 'entry')), ('tipo_documento','==','FEC')]}"/>
                 <button name="action_create_fec" type="object" string="Send FEC" attrs="{'invisible':['|', ('tipo_documento','!=','FEC'), ('state_tributacion','not in', (False,'rechazado', 'error'))]}"/>
                 <button name="create_partner_from_xml" class="oe_highlight" type="object" string="Create Provider" attrs="{'invisible':['|','|',('move_type','in',('entry', 'out_invoice', 'out_refund')),('partner_id','!=', False),('xml_supplier_approval','=', False)]}"/>
