@@ -584,7 +584,13 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
     if inv.tipo_documento == 'TE' or (inv.tipo_documento == 'NC' and not receiver_company.vat):
         pass
     else:
-        vat = re.sub('[^0-9]', '', receiver_company.vat)
+        # receiver_company.vat puede venir vacio (False) en clientes de
+        # exportacion (FEE) donde el numero de identificacion extranjero
+        # todavia no se cargo. re.sub revienta con "expected string or
+        # bytes-like object" si se le pasa False; con esto sale vacio y sigue
+        # el flujo (la Identificacion/IdentificacionExtranjero del XML ya
+        # estan condicionadas mas abajo a que vat tenga contenido).
+        vat = re.sub('[^0-9]', '', receiver_company.vat) if receiver_company.vat else ''
         if not receiver_company.identification_id:
             if len(vat) == 9:
                 id_code = '01'
