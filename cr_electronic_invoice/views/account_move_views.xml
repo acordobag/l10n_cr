@@ -7,15 +7,19 @@
         <field name="arch" type="xml">
 
             <xpath expr="//div[@name='button_box']" position="after">
-                <group attrs="{'invisible':[('move_type','in', ('in_invoice', 'in_refund', 'entry'))]}">
+                <!-- tipo_documento='disabled' nunca llama a get_invoice_sequence(): no tiene
+                     sequence/number_electronic, asi que jamas se enviara ni consultara, sin
+                     importar cuanto tiempo pase. Antes estos dos banners se mostraban igual,
+                     dando a entender que un documento deshabilitado se iba a mandar solo. -->
+                <group attrs="{'invisible':['|', ('move_type','in', ('in_invoice', 'in_refund', 'entry')), ('tipo_documento','=','disabled')]}">
                     <div class="alert alert-danger" role="alert" attrs="{'invisible':['|', ('state_tributacion','not in', (False)), ('state', 'in', ('draft', 'cancel'))]}">
-                        The document has not yet been issued, it will be sent automatically in 5 minutes, if you need to send it manually press 
+                        The document has not yet been issued, it will be sent automatically in 5 minutes, if you need to send it manually press
                         <button class="btn btn-primary" name="generate_and_send_invoice" type="object" string="Send Document"/>
                     </div>
                 </group>
-                <group attrs="{'invisible':[('move_type','=', 'entry')]}">
+                <group attrs="{'invisible':['|', ('move_type','=', 'entry'), ('tipo_documento','=','disabled')]}">
                     <div class="alert alert-warning" role="alert" attrs="{'invisible':['|', ('state_tributacion','not in', ('procesando')), ('state', 'in', ('draft', 'cancel'))]}">
-                        The document was issued successfully, however we still do not have the answer, it will be consulted in 10 minutes, if you wish to consult it manually press 
+                        The document was issued successfully, however we still do not have the answer, it will be consulted in 10 minutes, if you wish to consult it manually press
                         <button class="btn btn-primary" name="action_check_hacienda" type="object" string="Consult Document"/>
                     </div>
                 </group>
