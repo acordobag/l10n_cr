@@ -1949,6 +1949,29 @@ class AccountInvoiceElectronic(models.Model):
                       'cambie el tipo de documento.') % '\n- '.join(errors)
                 )
 
+    def _avoid_hacienda_like_name(self):
+        """Evita que un comprobante no-electronico herede un numero con el
+        mismo formato de 20 digitos que usa el consecutivo real de Hacienda.
+
+        Un comprobante 'disabled' no llama a get_invoice_sequence(): su
+        'name' lo pone el mecanismo generico de numeracion de Odoo (el
+        ultimo 'name' existente en el diario, ver _get_last_sequence del
+        core). Si los ultimos comprobantes del mismo diario fueron
+        electronicos, su 'name' se sobreescribio con el consecutivo real
+        de Hacienda (ver generate_and_send_invoice: 'inv.name = inv.sequence'),
+        asi que el siguiente comprobante no-electronico hereda ese mismo
+        formato de 20 digitos por pura coincidencia de numeracion -nunca
+        se envio a Hacienda, pero el numero es indistinguible a simple
+        vista de uno que si se envio, y si mas adelante un documento
+        electronico real cae en ese mismo numero, terminaria con el mismo
+        'name' que este, duplicado dentro del mismo diario. Se le antepone
+        un prefijo para que nunca choque ni se confunda con un consecutivo
+        real.
+        """
+        self.ensure_one()
+        if self.name and re.match(r'^\d{20}$', self.name):
+            self.name = 'NE-%s' % self.name
+
     def action_post(self):
         # Revisamos si el ambiente para Hacienda está habilitado
         for inv in self:
@@ -1956,6 +1979,7 @@ class AccountInvoiceElectronic(models.Model):
             if inv.company_id.frm_ws_ambiente == 'disabled' or inv.tipo_documento == 'disabled':
                 super(AccountInvoiceElectronic, inv).action_post()
                 inv.tipo_documento = 'disabled'
+                inv._avoid_hacienda_like_name()
                 continue
 
             if inv._has_electronic_invoice_configuration():
