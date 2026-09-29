@@ -26,6 +26,7 @@
         'data/aut_ex_data.xml',
         'data/code_type_product_data.xml',
         'data/identification_type_data.xml',
+        'data/ir_config_parameter_data.xml',
         'data/ir_cron_data.xml',
         'data/mail_template_data.xml',
         'data/payment_methods_data.xml',

@@ -49,17 +49,19 @@ class AccountJournalInherit(models.Model):
             inv_xmlns = namespaces.pop(None)
             namespaces['inv'] = inv_xmlns
             number_electronic = invoice_xml.xpath("inv:Clave", namespaces=namespaces)[0].text
-
-            result = self.env['account.move'].search([('number_electronic', '=', number_electronic), '|',
-                                                         ('company_id', '=', self.env.user.company_id.id),
-                                                         ('company_id', '=', False)], limit=1)
-
-            if result:
-                raise UserError("Duplicate invoice")
         except Exception as e:
             _logger.exception('FECR: ERROR Importing invoice %s', e)
             # return False
             raise UserError(_("This XML file is not XML-compliant. Error: %s") % e)
+
+        # Fuera del try: el duplicado se reportaba como "XML no valido". Una
+        # factura anulada libera su clave para volver a importar el XML.
+        result = self.env['account.move'].search([('number_electronic', '=', number_electronic),
+                                                  ('state', '!=', 'cancel'), '|',
+                                                  ('company_id', '=', self.env.user.company_id.id),
+                                                  ('company_id', '=', False)], limit=1)
+        if result:
+            raise UserError(_("Duplicate invoice"))
         # attachment.write({'res_model': 'mail.compose.message'})
 
         # decoders = self.env['account.move']._get_create_invoice_from_attachment_decoders()

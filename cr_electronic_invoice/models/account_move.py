@@ -231,14 +231,37 @@ class AccountInvoiceElectronic(models.Model):
     economic_activities_ids = fields.Many2many('economic.activity', string='Economic activities',
                                                compute='_compute_economic_activities', context={'active_test': False})
 
-    not_loaded_invoice = fields.Char(string='Original Invoice Number not loaded', readonly=True)
+    # Clave y fecha del comprobante original cuando no esta en Odoo (sistema
+    # anterior): las NC/ND las escriben a mano.
+    not_loaded_invoice = fields.Char(string='Original Invoice Number not loaded')
 
-    not_loaded_invoice_date = fields.Date(string='Original Invoice Date not loaded', readonly=True)
+    not_loaded_invoice_date = fields.Date(string='Original Invoice Date not loaded')
 
-    _sql_constraints = [
-        ('number_electronic_uniq', 'unique (company_id, number_electronic)',
-         "La clave de comprobante debe ser única"),
-    ]
+    # La clave es unica por compania, pero un comprobante anulado la libera para
+    # poder volver a importar/cargar el mismo XML. Reemplaza el unique total.
+    def init(self):
+        super().init()
+        self.env.cr.execute("ALTER TABLE account_move DROP CONSTRAINT IF EXISTS account_move_number_electronic_uniq")
+        self.env.cr.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS account_move_number_electronic_uniq_idx
+            ON account_move (company_id, number_electronic)
+            WHERE number_electronic IS NOT NULL AND state != 'cancel'
+        """)
+
+    # Por SQL y sin guardar antes: un search guardaba primero este documento y
+    # el indice respondia con su error tecnico en vez de este mensaje. El
+    # estado de los candidatos se lee del ORM, que incluye lo aun no guardado
+    # (p. ej. una anulada en la misma transaccion).
+    @api.constrains('number_electronic', 'company_id', 'state')
+    def _check_number_electronic_unique(self):
+        for move in self.filtered(lambda m: m.number_electronic and m.state != 'cancel'):
+            self.env.cr.execute("""
+                SELECT id FROM account_move
+                WHERE company_id = %s AND number_electronic = %s AND id != %s
+            """, [move.company_id.id, move.number_electronic, move.id])
+            others = self.sudo().browse([row[0] for row in self.env.cr.fetchall()])
+            if others.filtered(lambda m: m.state != 'cancel' and m.number_electronic == move.number_electronic):
+                raise UserError(_('La clave de comprobante debe ser única'))
 
     qr_image = fields.Binary("QR Code", compute='_compute_qr_code')
     partner_vat = fields.Char(string='Partner Tax ID', related="partner_id.vat",
@@ -364,19 +387,74 @@ class AccountInvoiceElectronic(models.Model):
             self.economic_activities_ids = self.env['economic.activity'].search([('active', '=', True)])
             self.economic_activity_id = self.company_id.activity_id
 
-        if self.partner_id and self.partner_id.export:
-            self.tipo_documento = 'FEE'
-        elif self.move_type == 'out_refund':
-            self.tipo_documento = 'NC'
-        elif self.partner_id and self.partner_id.vat:
-            if self.partner_id.country_id and self.partner_id.country_id.code != 'CR':
-                self.tipo_documento = 'TE'
-            elif self.partner_id.identification_id and self.partner_id.identification_id.code == '05':
-                self.tipo_documento = 'TE'
+        # Solo aplica a documentos de venta: en una factura de proveedor el tipo
+        # lo define la confirmacion (FEC) o la importacion del XML (CCE), y este
+        # bloque pisaba con FE o TE lo elegido (CONT, disabled) al cambiar el
+        # proveedor.
+        if self.move_type in ('out_invoice', 'out_refund'):
+            if self.partner_id and self.partner_id.export:
+                self.tipo_documento = 'FEE'
+            elif self.move_type == 'out_refund':
+                self.tipo_documento = 'NC'
+            elif self.partner_id and self.partner_id.vat:
+                if self.partner_id.country_id and self.partner_id.country_id.code != 'CR':
+                    self.tipo_documento = 'TE'
+                elif self.partner_id.identification_id and self.partner_id.identification_id.code == '05':
+                    self.tipo_documento = 'TE'
+                else:
+                    self.tipo_documento = 'FE'
             else:
-                self.tipo_documento = 'FE'
-        else:
-            self.tipo_documento = 'TE'
+                self.tipo_documento = 'TE'
+
+    def _get_electronic_mail_attachments(self):
+        """XML del comprobante y de la respuesta de Hacienda, de esta factura.
+
+        Son los adjuntos del propio movimiento. Antes se copiaban a
+        email_template.attachment_ids, un registro compartido por todos los
+        envios, y un correo salia con el XML de otra factura.
+        """
+        self.ensure_one()
+        Attachment = self.env['ir.attachment']
+        if not self.number_electronic:
+            return Attachment
+        attachment_ids = []
+        for field_name, fname in (('xml_comprobante', self.fname_xml_comprobante),
+                                  ('xml_respuesta_tributacion', self.fname_xml_respuesta_tributacion)):
+            candidates = Attachment.sudo().search([
+                ('res_model', '=', self._name),
+                ('res_id', '=', self.id),
+                ('res_field', '=', field_name),
+            ], order='id desc')
+            if not candidates:
+                continue
+            # Un reenvio, una FEC rechazada o una respuesta guardada dos veces
+            # dejan varios adjuntos en el mismo campo, alguno vacio. Se manda el
+            # que lleva el nombre del comprobante actual y tiene contenido.
+            current = (
+                candidates.filtered(lambda a: a.name == fname and a.file_size)
+                or candidates.filtered(lambda a: a.file_size)
+                or candidates
+            )[:1]
+            attachment_ids += current.ids
+        return Attachment.browse(attachment_ids)
+
+    def _send_electronic_invoice_email(self, email_template):
+        """Manda el comprobante al cliente y deja constancia en la factura.
+
+        La plantilla tiene auto_delete: el correo se borra al salir y se lleva
+        su mensaje, asi que sin esta nota no quedaria rastro del envio.
+        """
+        self.ensure_one()
+        attachments = self._get_electronic_mail_attachments()
+        email_template.with_context(type='binary', default_type='binary').send_mail(
+            self.id,
+            raise_exception=False,
+            force_send=True,
+            email_values={'attachment_ids': [(4, aid) for aid in attachments.ids]})
+        # _message_log deja la nota sin notificar a los seguidores.
+        self._message_log(body=_('Comprobante electrónico enviado por correo a %s. Adjuntos: %s') % (
+            self.partner_id.email or '-',
+            ', '.join(attachments.mapped('name')) or '-'))
 
     def action_invoice_sent_mass(self):
 
@@ -385,8 +463,6 @@ class AccountInvoiceElectronic(models.Model):
                                           raise_if_not_found=False)
         else:
             email_template = self.env.ref('account.email_template_edi_invoice', raise_if_not_found=False)
-
-        email_template.attachment_ids = [(5, 0, 0)]
 
         lang = False
         if email_template:
@@ -414,26 +490,7 @@ class AccountInvoiceElectronic(models.Model):
                 attachment_resp = self.env['ir.attachment'].sudo().search(domain_resp, limit=1)
 
                 if attachment_resp:
-                    # attachment_resp.name = self.fname_xml_respuesta_tributacion
-                    fname_xml_comprobante = self.fname_xml_comprobante
-                    attach_copy = self.env['ir.attachment'].create({'name': fname_xml_comprobante,
-                                                                    'type': 'binary',
-                                                                    'datas': self.xml_comprobante,
-                                                                    'res_name': fname_xml_comprobante,
-                                                                    'mimetype': 'text/xml'})
-                    fname_xml_respuesta_tributacion = self.fname_xml_respuesta_tributacion
-                    attach_resp_copy = self.env['ir.attachment'].create({'name': fname_xml_respuesta_tributacion,
-                                                                         'type': 'binary',
-                                                                         'datas': self.xml_respuesta_tributacion,
-                                                                         'res_name': fname_xml_respuesta_tributacion,
-                                                                         'mimetype': 'text/xml'})
-                    email_template.attachment_ids = [(6, 0, [attach_copy.id, attach_resp_copy.id])]
-                    email_template.with_context(type='binary',
-                                                default_type='binary').send_mail(self.id,
-                                                                                 raise_exception=False,
-                                                                                 force_send=True)
-
-                    email_template.attachment_ids = [(5, 0, 0)]
+                    self._send_electronic_invoice_email(email_template)
                 else:
                     raise UserError(_('Response XML from Hacienda has not been received'))
             else:
@@ -450,8 +507,6 @@ class AccountInvoiceElectronic(models.Model):
                                           raise_if_not_found=False)
         else:
             email_template = self.env.ref('account.email_template_edi_invoice', raise_if_not_found=False)
-
-        email_template.attachment_ids = [(5, 0, 0)]
 
         lang = False
         if email_template:
@@ -477,22 +532,10 @@ class AccountInvoiceElectronic(models.Model):
                                ('name', '=', 'AHC_' + self.number_electronic + '.xml')]
                 attachment_resp = self.env['ir.attachment'].sudo().search(domain_resp, limit=1)
 
-                if attachment_resp:
-                    # attachment_resp.name = self.fname_xml_respuesta_tributacion
-                    fname_xml_comprobante = self.fname_xml_comprobante
-                    fname_xml_respuesta_tributacion = self.fname_xml_respuesta_tributacion
-                    attach_copy = self.env['ir.attachment'].create({'name': fname_xml_comprobante,
-                                                                    'type': 'binary',
-                                                                    'datas': self.xml_comprobante,
-                                                                    'res_name': fname_xml_comprobante,
-                                                                    'mimetype': 'text/xml'})
-                    attach_resp_copy = self.env['ir.attachment'].create({'name': fname_xml_respuesta_tributacion,
-                                                                         'type': 'binary',
-                                                                         'datas': self.xml_respuesta_tributacion,
-                                                                         'res_name': fname_xml_respuesta_tributacion,
-                                                                         'mimetype': 'text/xml'})
-                    email_template.attachment_ids = [(6, 0, [attach_copy.id, attach_resp_copy.id])]
-                else:
+                # El asistente adjunta los XML de esta factura (ver
+                # account.invoice.send.onchange_template_id); no se tocan los
+                # adjuntos de la plantilla, que es un registro compartido.
+                if not attachment_resp:
                     raise UserError(_('Response XML from Hacienda has not been received'))
             else:
                 raise UserError(_('Invoice XML has not been generated for id:' + str(self.id)))
@@ -630,6 +673,18 @@ class AccountInvoiceElectronic(models.Model):
                 if product_id:
                     product = self.env['product.product'].search([('id', '=', product_id)], limit=1)
 
+            # Sin una cuenta de gasto de esta compania las lineas no se pueden
+            # crear: sin cuenta reventaba con "'bool' object has no attribute
+            # 'id'". La cuenta de Ajustes es un solo parametro para todas las
+            # companias; la del diario de compras es propia de cada una.
+            if load_lines and not account:
+                raise UserError(_(
+                    'No se pueden cargar las líneas del XML: falta una cuenta de gasto válida '
+                    'para la compañía "%(company)s". Configúrela en el diario de compras '
+                    '"%(journal)s", pestaña Factura Electrónica.'
+                ) % {'company': self.company_id.display_name,
+                     'journal': purchase_journal.display_name if purchase_journal else ''})
+
             api_facturae.load_xml_data(self, load_lines, account, product, analytic_account)
         except Exception as e:
             if e.__class__.__name__ == "UniqueViolation":
@@ -637,6 +692,8 @@ class AccountInvoiceElectronic(models.Model):
             raise e
 
     def action_send_mrs_to_hacienda(self):
+        if any(inv.state != 'posted' for inv in self):
+            raise UserError(_('Confirme la factura antes de enviarla a Hacienda.'))
         if self.state_invoice_partner:
             self.state_tributacion = False
             self.send_mrs_to_hacienda()
@@ -945,15 +1002,10 @@ class AccountInvoiceElectronic(models.Model):
                             if attachment_resp:
                                 attachment_resp.name = i.fname_xml_respuesta_tributacion
 
-                                attach_copy = attachment.copy()
-                                attach_resp_copy = attachment_resp.copy()
-                                email_template.attachment_ids = [(6, 0, [attach_copy.id, attach_resp_copy.id])]
-
-                                email_template.with_context(type='binary',
-                                                            default_type='binary').send_mail(i.id,
-                                                                                             raise_exception=False,
-                                                                                             force_send=True)
-                                email_template.attachment_ids = [(5, 0, 0)]
+                                # Los XML se adjuntan a este correo concreto:
+                                # la plantilla es compartida y dejarselos puestos
+                                # mandaba el XML de una factura con otra.
+                                i._send_electronic_invoice_email(email_template)
 
                 elif estado_m_h in ('firma_invalida'):
                     if i.error_count > 10:
@@ -1052,7 +1104,7 @@ class AccountInvoiceElectronic(models.Model):
                 'antes de reintentar.'
             ))
         for payment in self._get_reconciled_payments():
-            if payment.state == 'cancelled':
+            if payment.state == 'cancel':
                 continue
             try:
                 payment.action_cancel()
@@ -1090,15 +1142,62 @@ class AccountInvoiceElectronic(models.Model):
         })
         return reversal
 
-    def _copy_for_fe_retry(self, reversal):
+    # Anexos y Estructuras v4.4, nota 10: el comprobante que sustituye a uno
+    # rechazado por Hacienda lo referencia con el tipo 10.
+    FE_RETRY_REFERENCE_DOCUMENT_CODE = '10'
+    FE_RETRY_REFERENCE_CODE = '04'
+
+    def _get_fe_retry_hacienda_state(self):
+        """Estado real en Hacienda antes de reintentar: 'rechazado' o 'no_recibido'.
+
+        Bloquea si Hacienda la acepto (reintentar duplicaria la venta), si aun
+        la procesa o si no se pudo consultar."""
+        self.ensure_one()
+        if not self.number_electronic:
+            return 'no_recibido'
+        ambiente = self.company_id.frm_ws_ambiente
+        respuesta = api_facturae.consulta_clave(
+            self.number_electronic, api_facturae.get_token_hacienda(self, ambiente), ambiente)
+        estado = respuesta.get('ind-estado')
+        if respuesta.get('status') == 200:
+            if estado == 'rechazado':
+                return 'rechazado'
+            if estado == 'aceptado':
+                raise UserError(_(
+                    'No se puede reintentar %s: Hacienda la tiene ACEPTADA. Consulte su estado para actualizarla.'
+                ) % self.display_name)
+            raise UserError(_(
+                'No se puede reintentar %(doc)s: Hacienda todavia la reporta como "%(estado)s". '
+                'Espere la respuesta final.'
+            ) % {'doc': self.display_name, 'estado': estado})
+        if 'no ha sido recibido' in (respuesta.get('error-cause') or ''):
+            return 'no_recibido'
+        raise UserError(_(
+            'No se puede reintentar %(doc)s: no se pudo verificar su estado en Hacienda (%(detalle)s). '
+            'Intente de nuevo.'
+        ) % {'doc': self.display_name,
+             'detalle': respuesta.get('error-cause') or respuesta.get('text') or respuesta.get('status')})
+
+    def _copy_for_fe_retry(self, reversal, hacienda_state=False):
         """Copia limpia del documento rechazado, en borrador, con Clave propia."""
         self.ensure_one()
-        new_invoice = self.copy({
-            **self._get_fe_retry_clean_electronic_values(),
-            'name': '/',
+        reference = {
             'invoice_id': self.invoice_id.id,
             'reference_code_id': self.reference_code_id.id,
             'reference_document_id': self.reference_document_id.id,
+        }
+        if self.move_type == 'out_invoice' and hacienda_state == 'rechazado':
+            reference = {
+                'invoice_id': self.id,
+                'reference_code_id': self.env['reference.code'].search(
+                    [('code', '=', self.FE_RETRY_REFERENCE_CODE)], limit=1).id,
+                'reference_document_id': self.env['reference.document'].search(
+                    [('code', '=', self.FE_RETRY_REFERENCE_DOCUMENT_CODE)], limit=1).id,
+            }
+        new_invoice = self.copy({
+            **self._get_fe_retry_clean_electronic_values(),
+            **reference,
+            'name': '/',
             'fe_retry_origin_id': self.id,
             'fe_retry_reversal_id': reversal.id,
             'fe_retry_new_id': False,
@@ -1117,9 +1216,10 @@ class AccountInvoiceElectronic(models.Model):
                     inv.state_tributacion not in ('rechazado', 'error'):
                 raise UserError(_('Solo se pueden reintentar facturas y notas de credito de '
                                    'cliente rechazadas o con error.'))
+            hacienda_state = inv._get_fe_retry_hacienda_state()
             inv._cancel_fe_retry_payments()
             reversal = inv._reverse_fe_retry_accounting()
-            new_invoice = inv._copy_for_fe_retry(reversal)
+            new_invoice = inv._copy_for_fe_retry(reversal, hacienda_state)
             inv.write({
                 'fe_retry_new_id': new_invoice.id,
                 'fe_retry_reversal_id': reversal.id,
@@ -1176,35 +1276,30 @@ class AccountInvoiceElectronic(models.Model):
             inv.send_mrs_to_hacienda()
 
     def action_create_fec(self):
+        if any(inv.state != 'posted' for inv in self):
+            raise UserError(_('Confirme la factura antes de enviarla a Hacienda.'))
+        # Antes lanzaba este error siempre, aun despues de enviar: revertia lo
+        # guardado del envio aunque Hacienda ya habia recibido la FEC.
         if not self.company_id.frm_ws_ambiente == 'disabled':
-            self.generate_and_send_invoices(self)
+            return self.generate_and_send_invoices(self)
 
         raise UserError(_('Hacienda API is disabled in company'))
 
     @api.model
     def _send_invoices_to_hacienda(self, max_invoices=10):  # cron
-        days_left = self.env.user.company_id.get_days_left()
-        _logger.debug('E-INV CR - Ejecutando _send_invoices_to_hacienda')
-        invoices = self.env['account.move'].search([('move_type', 'in', ['out_invoice', 'out_refund']),
-                                                    ('state', '=', 'posted'),
-                                                    ('number_electronic', '!=', False),
-                                                    ('invoice_date', '>=', '2019-07-01'),
-                                                    '|', ('state_tributacion', '=', False),
-                                                    ('state_tributacion', '=', 'ne')], order='id asc',
-                                                   limit=max_invoices)
-        if days_left >= 0:
-            self.generate_and_send_invoices(invoices)
-        else:
-            message = self.env.user.company_id.get_message_to_send()
-            for inv in invoices:
-                inv.message_post(
-                    body=message,
-                    subject=_('IMPORTANT NOTICE!!'),
-                    message_type='notification',
-                    # subtype=None,
-                    parent_id=False,
-                )
-                inv.state_tributacion = 'error'
+        # La vigencia de la llave se revisa por factura, con la de su compania.
+        # La FEC no entra: en 14 toda factura manual de un proveedor de Costa
+        # Rica con cedula se vuelve FEC al confirmar, y se envia con su boton.
+        invoices = self.env['account.move'].search([
+            ('move_type', 'in', ('out_invoice', 'out_refund')),
+            ('state', '=', 'posted'),
+            ('number_electronic', '!=', False),
+            ('invoice_date', '>=', '2019-07-01'),
+            ('company_id.frm_ws_ambiente', 'in', ('api-stag', 'api-prod')),
+            ('tipo_documento', '!=', 'disabled'),
+            ('state_tributacion', 'in', (False, 'ne')),
+        ], order='id asc', limit=max_invoices)
+        self.generate_and_send_invoices(invoices)
         _logger.info('E-INV CR - _send_invoices_to_hacienda - Completed Successfully')
 
     def generate_and_send_invoice(self):
@@ -1224,13 +1319,18 @@ class AccountInvoiceElectronic(models.Model):
         total_invoices = len(invoices)
         current_invoice = 0
 
-        days_left = self.env.user.company_id.get_days_left()
-        message = self.env.user.company_id.get_message_to_send()
         for inv in invoices:
             try:
+                # Vigencia de la llave de la compania de la factura, no la del
+                # usuario: el cron corre para todas las companias.
+                days_left = inv.company_id.get_days_left()
+                message = inv.company_id.get_message_to_send()
+                if days_left < 0:
+                    inv._set_electronic_invoice_error(message)
+                    continue
                 current_invoice += 1
 
-                if days_left <= self.env.user.company_id.range_days:
+                if days_left <= inv.company_id.range_days:
                     inv.message_post(
                         body=message,
                         subject=_('IMPORTANT NOTICE!!'),
@@ -1240,37 +1340,75 @@ class AccountInvoiceElectronic(models.Model):
                     )
 
                 if not inv.sequence or not inv.sequence.isdigit():  # or (len(inv.number) == 10):
-                    inv.state_tributacion = 'na'
-                    _logger.info('E-INV CR - Ignored invoice:%s', inv.name)
-                    continue
+                    if inv.tipo_documento == 'FEC':
+                        # Una FEC puede haberse confirmado sin consecutivo si al
+                        # confirmar faltaban datos del proveedor o la secuencia de
+                        # la compania. Se genera aqui si ya es posible; si no, se
+                        # marca error recuperable en vez de 'na', que dejaba el
+                        # documento sin boton y fuera de todas las colas.
+                        sequence_record = inv.get_invoice_sequence()[1]
+                        motivo = inv._get_fec_blocking_reason()
+                        if not sequence_record or motivo:
+                            inv._set_electronic_invoice_error(
+                                motivo or _('No se pudo determinar el consecutivo de la '
+                                            'Factura Electronica de Compra.'))
+                            continue
+                        response_json = api_facturae.get_clave_hacienda(
+                            inv, 'FEC', sequence_record.next_by_id(),
+                            inv.journal_id.sucursal or inv.company_id.sucursal_MR,
+                            inv.journal_id.terminal or inv.company_id.terminal_MR)
+                        inv.number_electronic = response_json.get('clave')
+                        inv.sequence = response_json.get('consecutivo')
+                        inv._set_fec_name_from_consecutive()
+                        _logger.info('E-INV CR - FEC sin consecutivo, generado: %s', inv.sequence)
+                    else:
+                        inv.state_tributacion = 'na'
+                        _logger.info('E-INV CR - Ignored invoice:%s', inv.name)
+                        continue
 
                 _logger.debug('generate_and_send_invoices - Invoice %s / %s  -  number:%s',
                               current_invoice, total_invoices, inv.number_electronic)
 
                 if not inv.xml_comprobante or (inv.tipo_documento == 'FEC' and inv.state_tributacion == 'rechazado'):
+                    # En una FEC el Emisor del XML es el proveedor, y ese bloque
+                    # exige datos que en un res.partner pueden faltar. Se avisa
+                    # cual falta en vez de reventar armando el XML.
+                    if inv.tipo_documento == 'FEC':
+                        motivo = inv._get_fec_blocking_reason()
+                        if motivo:
+                            inv._set_electronic_invoice_error(motivo)
+                            continue
 
                     if inv.tipo_documento == 'FEC' and inv.state_tributacion == 'rechazado':
                         msg_body = _('Another FEC is being sent because the previous one was rejected by Hacienda. ')
                         msg_body += _('Attached the previous XMLs. Previous key: ')
+                        # message_post espera (nombre, contenido). Se adjuntan los
+                        # XML previos solo si existen: pasar el nombre como
+                        # contenido, o False, rompia el reintento.
+                        previos = []
+                        if inv.fname_xml_comprobante and inv.xml_comprobante:
+                            previos.append((inv.fname_xml_comprobante,
+                                            base64.b64decode(inv.xml_comprobante)))
+                        if inv.fname_xml_respuesta_tributacion and inv.xml_respuesta_tributacion:
+                            previos.append((inv.fname_xml_respuesta_tributacion,
+                                            base64.b64decode(inv.xml_respuesta_tributacion)))
                         inv.message_post(body=msg_body + inv.number_electronic,
                                          subject=_('Sending a second FEC'),
                                          message_type='notification',
                                          # subtype=None,
                                          parent_id=False,
-                                         attachments=[[inv.fname_xml_respuesta_tributacion,
-                                                       inv.fname_xml_respuesta_tributacion],
-                                                      [inv.fname_xml_comprobante,
-                                                       inv.fname_xml_comprobante]])
+                                         attachments=previos)
 
                         sequence = inv.company_id.FEC_sequence_id.next_by_id()
-                        response_json = api_facturae.get_clave_hacienda(self,
+                        response_json = api_facturae.get_clave_hacienda(inv,
                                                                         inv.tipo_documento,
                                                                         sequence,
-                                                                        inv.journal_id.sucursal,
-                                                                        inv.journal_id.terminal)
+                                                                        inv.journal_id.sucursal or inv.company_id.sucursal_MR,
+                                                                        inv.journal_id.terminal or inv.company_id.terminal_MR)
 
                         inv.number_electronic = response_json.get('clave')
                         inv.sequence = response_json.get('consecutivo')
+                        inv._set_fec_name_from_consecutive()
 
                     now_utc = datetime.datetime.now(pytz.timezone('UTC'))
                     now_cr = now_utc.astimezone(pytz.timezone('America/Costa_Rica'))
@@ -1292,25 +1430,36 @@ class AccountInvoiceElectronic(models.Model):
 
                     if (inv.invoice_id or inv.not_loaded_invoice) and \
                             inv.reference_code_id and inv.reference_document_id:
-                        if inv.invoice_id:
-                            if inv.invoice_id.name:
-                                numero_documento_referencia = inv.invoice_id.number_electronic
-                                fecha_emision_referencia = inv.invoice_id.date_issuance
-                            else:
-                                numero_documento_referencia = inv.invoice_id and \
-                                                              re.sub('[^0-9]+', '', inv.invoice_id.sequence).rjust(50,
-                                                                                                                   '0') or '0000000'
-                                invoice_date = datetime.datetime.strptime(inv.invoice_id and
-                                                                          inv.invoice_id.invoice_date or
-                                                                          '2018-08-30', "%Y-%m-%d")
-                                fecha_emision_referencia = invoice_date.strftime("%Y-%m-%d") + "T12:00:00-06:00"
-                        else:
-                            numero_documento_referencia = inv.not_loaded_invoice
+                        # La referencia es la clave del comprobante original: la
+                        # del documento en Odoo si la tiene; si no (emitido por el
+                        # sistema anterior o cargado como disabled), la que se
+                        # escribio a mano. Sin clave ni fecha, el XML salia sin
+                        # InformacionReferencia y Hacienda rechazaba la NC.
+                        if inv.invoice_id.number_electronic:
+                            numero_documento_referencia = inv.invoice_id.number_electronic
+                            fecha_emision_referencia = inv.invoice_id.date_issuance
+                        elif inv.not_loaded_invoice and inv.not_loaded_invoice_date:
+                            numero_documento_referencia = inv._get_not_loaded_invoice_key()
                             fecha_emision_referencia = inv.not_loaded_invoice_date.strftime("%Y-%m-%d")
                             fecha_emision_referencia += "T12:00:00-06:00"
                         tipo_documento_referencia = inv.reference_document_id.code
                         codigo_referencia = inv.reference_code_id.code
                         razon_referencia = inv.reference_code_id.name
+
+                    # El esquema 4.4 exige InformacionReferencia en la FEC, pero
+                    # no hay comprobante electronico previo: se declara el
+                    # documento fisico del proveedor de regimen simplificado.
+                    if inv.tipo_documento == 'FEC' and not tipo_documento_referencia:
+                        get_param = self.env['ir.config_parameter'].sudo().get_param
+                        tipo_documento_referencia = get_param(
+                            'cr_electronic_invoice.fec_reference_document_code', '14')
+                        codigo_referencia = get_param(
+                            'cr_electronic_invoice.fec_reference_code', '04')
+                        razon_referencia = self.env['reference.code'].search(
+                            [('code', '=', codigo_referencia)], limit=1).name or ''
+                        numero_documento_referencia = (inv.not_loaded_invoice or inv.ref or '')[:50]
+                        ref_date = inv.not_loaded_invoice_date or inv.invoice_date
+                        fecha_emision_referencia = ref_date.strftime('%Y-%m-%d') + 'T12:00:00-06:00'
 
                     if inv.invoice_payment_term_id:
                         sale_conditions = inv.invoice_payment_term_id.sale_conditions_id and \
@@ -1435,8 +1584,8 @@ class AccountInvoiceElectronic(models.Model):
                                 _no_cabys_code = _(f'Warning!.\nLine without CABYS code: {inv_line.name}')
                                 continue
 
-                            if inv.tipo_documento == 'FEE' and inv_line.tariff_head:
-                                line["partidaArancelaria"] = inv_line.tariff_head
+                            if inv._requires_tariff_head() and inv_line.tariff_head:
+                                line["partidaArancelaria"] = re.sub(r'[^0-9]', '', inv_line.tariff_head)
 
                             if inv_line.discount and price_unit > 0:
                                 total_descuento += descuento
@@ -1451,6 +1600,7 @@ class AccountInvoiceElectronic(models.Model):
                             _tax_no_subject = False
                             _percentage_exoneration = 0
                             _tax_exempt = False
+                            xml_tax_lines = []
                             if inv_line.tax_ids:
                                 tax_index = 0
 
@@ -1528,6 +1678,33 @@ class AccountInvoiceElectronic(models.Model):
 
                                 line["impuesto"] = taxes
                                 line["impuestoNeto"] = 0 if _tax_from_factory else round(_line_tax, 5)
+                            elif inv.tipo_documento == 'FEE':
+                                _tax_exempt = True
+                                taxes[1] = {
+                                    'codigo': '01',
+                                    'tarifa': 0.0,
+                                    'monto': 0.0,
+                                    'iva_tax_desc': 'Tarifa 0%',
+                                    'iva_tax_code': '01',
+                                }
+                                line["impuesto"] = taxes
+                                line["impuestoNeto"] = 0.0
+                            else:
+                                # El esquema 4.4 exige Impuesto e ImpuestoNeto en
+                                # toda linea de detalle. Una linea sin impuestos se
+                                # declara con CodigoTarifaIVA 10 (Tarifa Exenta):
+                                # el 01 es "Tarifa 0%" del art. 32 y Hacienda no lo
+                                # cuenta ni como gravado ni como exento.
+                                _tax_exempt = True
+                                taxes[1] = {
+                                    'codigo': '01',
+                                    'tarifa': 0.0,
+                                    'monto': 0.0,
+                                    'iva_tax_desc': 'Tarifa Exenta',
+                                    'iva_tax_code': '10',
+                                }
+                                line["impuesto"] = taxes
+                                line["impuestoNeto"] = 0.0
 
                             # Si no hay product_uom_id se asume como Servicio
                             if inv_line.product_id.type == 'service' or \
@@ -1717,6 +1894,72 @@ class AccountInvoiceElectronic(models.Model):
                                  body=_('Warning!.\n Error in generate_and_send_invoice: ') + str(error))
                 continue
 
+    # Numeracion del diario. Ventas: los documentos electronicos se renombran
+    # con su consecutivo de Hacienda (20 digitos) y los disabled continuaban
+    # ese formato, chocando con consecutivos reales; los disabled llevan su
+    # propia numeracion y los de 20 digitos siguen contando del lado
+    # electronico. Compras: cada FEC toma su consecutivo como nombre, y la
+    # siguiente factura de proveedor (MR, disabled) salia con un numero que
+    # parece un consecutivo FEC sin serlo. Las compras no se numeran a partir
+    # de esos nombres.
+    # El patron va como parametro: Odoo 14 aplica .format() a la consulta y las
+    # llaves de '{20}' la rompian.
+    _HACIENDA_NAME_PATTERN = '^[0-9]{20}$'
+    _DISABLED_SEQUENCE_CHAIN = "(COALESCE(tipo_documento, '') = 'disabled' AND name !~ %(cr_hacienda_name)s)"
+    _PURCHASE_SEQUENCE_CHAIN = "(name !~ %(cr_hacienda_name)s)"
+
+    def _get_cr_sequence_chain(self):
+        if self.move_type in ('in_invoice', 'in_refund'):
+            return self._PURCHASE_SEQUENCE_CHAIN
+        if self.move_type in ('out_invoice', 'out_refund'):
+            if self.tipo_documento == 'disabled':
+                return self._DISABLED_SEQUENCE_CHAIN
+            return 'NOT %s' % self._DISABLED_SEQUENCE_CHAIN
+        return False
+
+    def _get_last_sequence_domain(self, relaxed=False):
+        chain = self._get_cr_sequence_chain()
+        if not chain or not self.date or not self.journal_id:
+            return super()._get_last_sequence_domain(relaxed)
+
+        # Mismo filtro que Odoo (diario, rectificativas) pero sin fechas ni
+        # formato, que se deducen abajo mirando solo esta cadena: el ultimo
+        # documento del diario puede ser de la otra.
+        where_string, param = super()._get_last_sequence_domain(relaxed=True)
+        where_string += " AND %s " % chain
+        param['cr_hacienda_name'] = self._HACIENDA_NAME_PATTERN
+        if relaxed:
+            return where_string, param
+
+        self.flush(['name', 'date', 'journal_id', 'move_type', 'tipo_documento'])
+        reference_move_name = False
+        for date_clause, order in (("AND date <= %(ref_date)s", "date DESC, id DESC"), ("", "date ASC, id ASC")):
+            self.env.cr.execute(
+                f"SELECT name FROM account_move {where_string} AND name IS NOT NULL AND name != '' "
+                f"AND id != %(ref_id)s {date_clause} ORDER BY {order} LIMIT 1",
+                dict(param, ref_id=self._origin.id or 0, ref_date=self.date),
+            )
+            row = self.env.cr.fetchone()
+            if row:
+                reference_move_name = row[0]
+                break
+        sequence_number_reset = self._deduce_sequence_number_reset(reference_move_name)
+        if sequence_number_reset == 'year':
+            where_string += " AND date_trunc('year', date::timestamp without time zone) = date_trunc('year', %(date)s) "
+            param['date'] = self.date
+            param['anti_regex'] = re.sub(r"\?P<\w+>", "?:", self._sequence_monthly_regex.split('(?P<seq>')[0]) + '$'
+        elif sequence_number_reset == 'month':
+            where_string += " AND date_trunc('month', date::timestamp without time zone) = date_trunc('month', %(date)s) "
+            param['date'] = self.date
+        else:
+            param['anti_regex'] = re.sub(r"\?P<\w+>", "?:", self._sequence_yearly_regex.split('(?P<seq>')[0]) + '$'
+        if param.get('anti_regex') and not self.journal_id.sequence_override_regex:
+            where_string += " AND sequence_prefix !~ %(anti_regex)s "
+        return where_string, param
+
+    # Devuelve la secuencia (ir.sequence), no el numero: el consecutivo se pide
+    # en action_post despues de todas las validaciones. Pedirlo aqui lo gastaba
+    # aunque la factura no se pudiera confirmar (la secuencia no se deshace).
     def get_invoice_sequence(self):
         tipo_documento = self.tipo_documento
         sequence = False
@@ -1728,27 +1971,27 @@ class AccountInvoiceElectronic(models.Model):
 
             if self.tipo_documento == 'FE' and \
                     (not self.partner_id.vat or self.partner_id.identification_id.code == '05'):
-                self.tipo_documento = 'TE'
-            if self.tipo_documento == 'FE':
-                sequence = self.journal_id.FE_sequence_id.next_by_id()
-            elif self.tipo_documento == 'TE':
-                sequence = self.journal_id.TE_sequence_id.next_by_id()
-            elif self.tipo_documento == 'FEE':
-                sequence = self.journal_id.FEE_sequence_id.next_by_id()
-            elif self.tipo_documento == 'ND':
-                sequence = self.journal_id.ND_sequence_id.next_by_id()
+                tipo_documento = 'TE'
+            if tipo_documento == 'FE':
+                sequence = self.journal_id.FE_sequence_id
+            elif tipo_documento == 'TE':
+                sequence = self.journal_id.TE_sequence_id
+            elif tipo_documento == 'FEE':
+                sequence = self.journal_id.FEE_sequence_id
+            elif tipo_documento == 'ND':
+                sequence = self.journal_id.ND_sequence_id
 
         # Credit Note
         elif self.move_type == 'out_refund':
             tipo_documento = 'NC'
-            sequence = self.journal_id.NC_sequence_id.next_by_id()
+            sequence = self.journal_id.NC_sequence_id
 
         # Digital Supplier Invoice
         elif self.move_type == 'in_invoice' and self.partner_id.country_id and \
                 self.partner_id.country_id.code == 'CR' and self.partner_id.identification_id and \
                 self.partner_id.vat and self.xml_supplier_approval is False and self.tipo_documento != 'CONT':
             tipo_documento = 'FEC'
-            sequence = self.company_id.FEC_sequence_id.next_by_id()
+            sequence = self.company_id.FEC_sequence_id
 
         return (tipo_documento, sequence)
 
@@ -1878,12 +2121,56 @@ class AccountInvoiceElectronic(models.Model):
                 if not line.tax_ids:
                     line_name = product.display_name if product else (line.name or line.display_name)
                     errors.append(_('Linea "%s": seleccione al menos un impuesto.') % line_name)
+                # Hacienda rechaza con -150 si el precio unitario de una linea es cero.
+                if line.price_unit <= 0:
+                    line_name = product.display_name if product else (line.name or line.display_name)
+                    errors.append(_('Linea "%s": el precio unitario debe ser mayor a cero.')
+                                  % line_name)
 
             if errors:
                 raise UserError(
                     _('No se puede confirmar la factura electronica. Corrija lo siguiente:\n- %s') %
                     '\n- '.join(errors)
                 )
+
+    def _get_fec_blocking_reason(self):
+        """Explica por que no se puede generar o enviar una FEC ('' si se puede)."""
+        self.ensure_one()
+        partner = self.partner_id
+        faltan = []
+        if not partner.country_id or partner.country_id.code != 'CR':
+            faltan.append(_('el pais del proveedor debe ser Costa Rica'))
+        if not partner.identification_id:
+            faltan.append(_('el proveedor no tiene tipo de identificacion'))
+        if not partner.vat:
+            faltan.append(_('el proveedor no tiene cedula'))
+        if not (partner.state_id and partner.county_id and partner.district_id):
+            faltan.append(_('el proveedor no tiene provincia, canton y distrito'))
+        # OtrasSenas es obligatorio en el esquema y exige 5 caracteres minimo.
+        if len((partner.street or '').strip()) < 5:
+            faltan.append(_('las otras senas del proveedor deben tener al menos 5 caracteres'))
+        if len((self.company_id.street or '').strip()) < 5:
+            faltan.append(_('las otras senas de la compania deben tener al menos 5 caracteres'))
+        if not (self.economic_activity_id or partner.activity_id):
+            faltan.append(_('el proveedor no tiene actividad economica'))
+        if not self.company_id.FEC_sequence_id:
+            faltan.append(_('la compania no tiene secuencia de FEC configurada'))
+        if self.xml_supplier_approval:
+            faltan.append(_('la factura tiene XML de proveedor: corresponde mensaje '
+                            'receptor, no factura electronica de compra'))
+        # Hacienda rechaza con -150 si el precio unitario de una linea es cero.
+        if any(line.price_unit <= 0 for line in self.invoice_line_ids if not line.display_type):
+            faltan.append(_('hay lineas con precio unitario en cero'))
+        if not faltan:
+            return ''
+        return _('No se puede generar la Factura Electronica de Compra: %s.') % '; '.join(faltan)
+
+    def _set_electronic_invoice_error(self, message, post_message=True):
+        for inv in self:
+            inv.state_tributacion = 'error'
+            inv.electronic_invoice_return_message = message
+            if post_message:
+                inv.message_post(subject=_('Error'), body=message)
 
     def _validate_fec_before_post(self):
         """En una FEC el Emisor del XML es el proveedor: sus datos son obligatorios.
@@ -1923,24 +2210,39 @@ class AccountInvoiceElectronic(models.Model):
                 if missing_address:
                     errors.append(_('Proveedor "%s": complete la direccion (%s).')
                                   % (partner.display_name, ', '.join(missing_address)))
+                # OtrasSenas es obligatorio y exige 5 caracteres minimo.
+                if len((partner.street or '').strip()) < 5:
+                    errors.append(_('Proveedor "%s": las otras senas de la direccion deben '
+                                    'tener al menos 5 caracteres.') % partner.display_name)
 
                 if not (inv.economic_activity_id or partner.activity_id):
                     errors.append(_('Proveedor "%s": seleccione la actividad economica.')
                                   % partner.display_name)
 
+            if len((inv.company_id.street or '').strip()) < 5:
+                errors.append(_('Compania "%s": las otras senas de la direccion deben tener '
+                                'al menos 5 caracteres.') % inv.company_id.display_name)
             if not inv.company_id.FEC_sequence_id:
                 errors.append(_('Compania "%s": configure la secuencia de factura electronica '
                                 'de compra.') % inv.company_id.display_name)
+
+            if inv.xml_supplier_approval:
+                errors.append(_('Esta factura tiene XML de proveedor: corresponde un mensaje '
+                                'receptor, no una factura electronica de compra.'))
 
             for line in inv.invoice_line_ids:
                 if line.display_type in ('line_section', 'line_note'):
                     continue
                 product = line.product_id
                 cabys_code = (product.cabys_code or product.categ_id.cabys_code or '').strip() if product else ''
+                line_name = product.display_name if product else (line.name or line.display_name)
                 if not cabys_code:
-                    line_name = product.display_name if product else (line.name or line.display_name)
                     errors.append(_('Linea "%s": seleccione un producto con codigo CAByS o '
                                     'configure el CAByS en su categoria.') % line_name)
+                # Hacienda rechaza con -150 si el precio unitario de una linea es cero.
+                if line.price_unit <= 0:
+                    errors.append(_('Linea "%s": el precio unitario debe ser mayor a cero.')
+                                  % line_name)
 
             if errors:
                 raise UserError(
@@ -1948,6 +2250,98 @@ class AccountInvoiceElectronic(models.Model):
                       'siguiente:\n- %s\n\nSi esta factura no debe emitirse como FEC, '
                       'cambie el tipo de documento.') % '\n- '.join(errors)
                 )
+
+    # Anexos v4.4: con estos tipos de documento de referencia Hacienda verifica
+    # que el numero sea una clave valida (50 digitos).
+    KEY_REFERENCE_DOCUMENT_CODES = ('01', '02', '03', '04', '09', '11', '12', '15')
+
+    def _get_not_loaded_invoice_key(self):
+        self.ensure_one()
+        digits = re.sub(r'[^0-9]', '', self.not_loaded_invoice or '')
+        return digits if len(digits) == 50 else (self.not_loaded_invoice or '').strip()
+
+    # Una NC o ND lleva obligatoriamente la referencia al comprobante original.
+    # Si la factura de referencia no tiene clave en Odoo (la emitio el sistema
+    # anterior o esta como disabled), hay que escribir la clave y la fecha de
+    # emision originales. Se valida antes de pedir el consecutivo.
+    def _validate_reference_before_post(self):
+        for inv in self:
+            es_nota = (inv.move_type == 'out_refund' and inv.tipo_documento != 'disabled') or \
+                (inv.move_type == 'out_invoice' and inv.tipo_documento == 'ND')
+            if not es_nota:
+                continue
+            if inv.invoice_id.number_electronic:
+                continue
+            origen = inv.invoice_id.display_name or _('el comprobante original')
+            if not (inv.not_loaded_invoice and inv.not_loaded_invoice_date):
+                raise UserError(_(
+                    'No se puede confirmar %(doc)s: %(origen)s no tiene clave de Hacienda en el sistema. '
+                    'En la pestana Informacion Electronica escriba la clave y la fecha de emision del '
+                    'comprobante original (emitido por el sistema anterior). Si el documento no es '
+                    'electronico, cambie el tipo a Electronic Documents Disabled.'
+                ) % {'doc': inv.display_name, 'origen': origen})
+            if inv.reference_document_id.code in self.KEY_REFERENCE_DOCUMENT_CODES and \
+                    len(inv._get_not_loaded_invoice_key()) != 50:
+                raise UserError(_(
+                    'No se puede confirmar %(doc)s: la clave del comprobante original debe tener 50 digitos '
+                    '(tiene "%(clave)s").'
+                ) % {'doc': inv.display_name, 'clave': inv.not_loaded_invoice})
+
+    def _requires_tariff_head(self):
+        """FEE y las NC/ND que la modifican llevan partida arancelaria."""
+        self.ensure_one()
+        if self.tipo_documento == 'FEE':
+            return True
+        return self.tipo_documento in ('NC', 'ND') and self.invoice_id.tipo_documento == 'FEE'
+
+    # Anexos v4.4: la partida es obligatoria, con 12 digitos, en la FEE (y sus
+    # NC/ND) cuando el CAByS es de un bien (empieza con 0 a 4). Se valida antes
+    # de pedir el consecutivo para no enviar un comprobante que Hacienda rechaza.
+    def _validate_tariff_head_before_post(self):
+        for inv in self:
+            if inv.tipo_documento == 'disabled' or not inv._requires_tariff_head():
+                continue
+            errors = []
+            for line in inv.invoice_line_ids.filtered(lambda l: not l.display_type and l.product_id):
+                cabys = line.product_id.cabys_code or line.product_id.categ_id.cabys_code or ''
+                if not cabys or cabys[0] not in '01234':
+                    continue
+                if len(re.sub(r'[^0-9]', '', line.tariff_head or '')) != 12:
+                    errors.append(_('Linea "%(line)s": la partida arancelaria debe tener 12 digitos (tiene "%(value)s").') % {
+                        'line': line.name or line.product_id.display_name, 'value': line.tariff_head or ''})
+            if errors:
+                raise UserError(_(
+                    'No se puede confirmar %(doc)s: Hacienda exige la partida arancelaria de 12 digitos en las '
+                    'mercancias de una factura de exportacion.\n- %(errors)s'
+                ) % {'doc': inv.display_name, 'errors': '\n- '.join(errors)})
+
+    # La FEC es un comprobante que emitimos: como la FE, se llama con su
+    # consecutivo oficial. Las demas compras (MR, disabled) usan la numeracion
+    # del diario. Si otro documento del diario ya tiene ese nombre, la FEC
+    # conserva el del diario: renombrarla chocaria y no se podria confirmar.
+    def _set_fec_name_from_consecutive(self):
+        for move in self:
+            if move.move_type != 'in_invoice' or move.tipo_documento != 'FEC' or move.state != 'posted' \
+                    or not move.sequence or move.name == move.sequence:
+                continue
+            taken = self.sudo().search_count([
+                ('journal_id', '=', move.journal_id.id), ('name', '=', move.sequence),
+                ('state', '=', 'posted'), ('id', '!=', move.id),
+            ])
+            if taken:
+                _logger.warning('E-INV CR - FEC %s: el consecutivo %s ya es el nombre de otro documento',
+                                move.id, move.sequence)
+                continue
+            move.name = move.sequence
+
+    def _set_payment_reference(self, reference):
+        """Referencia de pago y nombre de la linea por cobrar, que la copia."""
+        for move in self:
+            old_reference = move.payment_reference
+            move.payment_reference = reference
+            move.line_ids.filtered(
+                lambda l: l.account_id.internal_type in ('receivable', 'payable') and l.name == old_reference
+            ).write({'name': reference})
 
     def _avoid_hacienda_like_name(self):
         """Evita que un comprobante no-electronico herede un numero con el
@@ -1977,8 +2371,10 @@ class AccountInvoiceElectronic(models.Model):
         for inv in self:
             narration_save = inv.narration
             if inv.company_id.frm_ws_ambiente == 'disabled' or inv.tipo_documento == 'disabled':
+                # Antes de confirmar: el nombre se toma de la numeracion disabled.
+                if inv.tipo_documento != 'disabled':
+                    inv.tipo_documento = 'disabled'
                 super(AccountInvoiceElectronic, inv).action_post()
-                inv.tipo_documento = 'disabled'
                 inv._avoid_hacienda_like_name()
                 continue
 
@@ -1986,8 +2382,15 @@ class AccountInvoiceElectronic(models.Model):
                 inv._validate_electronic_invoice_issuer_before_post()
                 if inv.move_type == 'out_invoice' and inv.tipo_documento == 'FE':
                     inv._validate_out_invoice_cabys_before_post()
-                if inv.move_type == 'in_invoice' and inv.tipo_documento == 'FEC':
-                    inv._validate_fec_before_post()
+                # La factura de proveedor llega como FE y se vuelve FEC en
+                # get_invoice_sequence: se valida con el tipo que va a quedar.
+                if inv.move_type == 'in_invoice':
+                    (tipo_compra, secuencia_compra) = inv.get_invoice_sequence()
+                    if tipo_compra == 'FEC' and secuencia_compra:
+                        inv.tipo_documento = 'FEC'
+                        inv._validate_fec_before_post()
+                inv._validate_tariff_head_before_post()
+                inv._validate_reference_before_post()
 
             # self._onchange_partner_id(validate_payment=False)
 
@@ -2044,14 +2447,15 @@ class AccountInvoiceElectronic(models.Model):
                 raise UserError(_(f'There is no registered exchange rate for the currency {currency.name}'))
 
             # Digital Invoice or ticket
+            sequence_record = False
             if inv.move_type in ('out_invoice', 'out_refund') and inv.number_electronic:
                 pass
             else:
-                (tipo_documento, sequence) = inv.get_invoice_sequence()
-                if tipo_documento and sequence:
+                (tipo_documento, sequence_record) = inv.get_invoice_sequence()
+                if tipo_documento and sequence_record:
                     inv.tipo_documento = tipo_documento
                 else:
-                    super().action_post()
+                    super(AccountInvoiceElectronic, inv).action_post()
                     continue
 
             # Calcular si aplica IVA Devuelto
@@ -2077,7 +2481,12 @@ class AccountInvoiceElectronic(models.Model):
                         'quantity': 1,
                     })
 
-            super().action_post()
+            # super() sobre esta factura: sobre self confirmaba todas las del lote
+            # sin consecutivo y la siguiente vuelta fallaba por ya confirmada.
+            super(AccountInvoiceElectronic, inv).action_post()
+
+            if sequence_record:
+                sequence = sequence_record.next_by_id()
 
             if not inv.number_electronic:
                 # if journal doesn't have sucursal use default from company
@@ -2095,7 +2504,16 @@ class AccountInvoiceElectronic(models.Model):
                 inv.number_electronic = response_json.get('clave')
                 inv.sequence = response_json.get('consecutivo')
 
-            inv.name = inv.sequence
+            # Odoo calcula la referencia de pago con el nombre provisional del
+            # diario y no la recalcula al renombrar: quedaba otro numero (a
+            # veces el de otra factura) y el pago no se conciliaba con esta. Si
+            # es la automatica, se recalcula con el consecutivo.
+            old_reference = inv._get_invoice_computed_reference() if inv.move_type == 'out_invoice' else False
+            if inv.move_type in ('out_invoice', 'out_refund') and inv.sequence and inv.name != inv.sequence:
+                inv.name = inv.sequence
+            inv._set_fec_name_from_consecutive()
+            if old_reference and inv.payment_reference == old_reference:
+                inv._set_payment_reference(inv._get_invoice_computed_reference())
             inv.state_tributacion = False
 
             inv.narration = narration_save
@@ -2143,6 +2561,10 @@ class AccountInvoiceElectronic(models.Model):
 
         move_vals_list = []
         for move, default_values in zip(self, default_values_list):
+            # Sin el asistente (p. ej. otros modulos) la NC tambien toma su tipo:
+            # disabled si la factura lo es.
+            if move.move_type == 'out_invoice':
+                default_values.setdefault('tipo_documento', 'disabled' if move.tipo_documento == 'disabled' else 'NC')
             default_values.update({
                 'move_type': reverse_type_map[move.move_type],
                 'reversed_entry_id': move.id,

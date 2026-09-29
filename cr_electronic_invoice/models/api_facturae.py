@@ -556,7 +556,10 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
 
     # Emisor
     sb.append('<Emisor>')
-    sb.append('<Nombre>' + escape(issuing_company.legal_name or issuing_company.name) + '</Nombre>')
+    # En un FEC el emisor es el proveedor (res.partner), que no tiene
+    # legal_name: ese campo solo existe en res.company.
+    issuer_legal_name = getattr(issuing_company, 'legal_name', False)
+    sb.append('<Nombre>' + escape(issuer_legal_name or issuing_company.name) + '</Nombre>')
     sb.append('<Identificacion>')
     sb.append('<Tipo>' + issuing_company.identification_id.code + '</Tipo>')
     sb.append('<Numero>' + issuing_company.vat + '</Numero>')
@@ -676,14 +679,14 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
             sb.append('<LineaDetalle>')
             sb.append('<NumeroLinea>' + str(numero_linea) + '</NumeroLinea>')
 
+            # Partida Arancelaria (FEE y sus NC/ND): el XSD 4.4 la pone antes
+            # del CAByS; despues, Hacienda rechaza el comprobante.
+            if v.get('partidaArancelaria'):
+                sb.append('<PartidaArancelaria>' + str(v['partidaArancelaria']) + '</PartidaArancelaria>')
+
             # CABYS
             if v.get('codigoCabys'):
-                # En 4.4 el CABYS sigue en <Codigo> (no <CodigoCABYS>)
                 sb.append('<CodigoCABYS>' + (v['codigoCabys']) + '</CodigoCABYS>')
-
-            # Partida Arancelaria (solo FEE)
-            if inv.tipo_documento == 'FEE' and v.get('partidaArancelaria'):
-                sb.append('<PartidaArancelaria>' + str(v['partidaArancelaria']) + '</PartidaArancelaria>')
 
             # Código comercial opcional
             if v.get('codigo'):
@@ -871,13 +874,18 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
     sb.append('</ResumenFactura>')
 
     # Información de referencia
-    if tipo_documento_referencia and numero_documento_referencia and fecha_emision_referencia:
+    # Numero, Codigo y Razon son opcionales en el esquema: omitirlos si no hay
+    # valor, en vez de escribir el literal 'False'.
+    if tipo_documento_referencia and fecha_emision_referencia:
         sb.append('<InformacionReferencia>')
         sb.append('<TipoDocIR>' + str(tipo_documento_referencia) + '</TipoDocIR>')
-        sb.append('<Numero>' + str(numero_documento_referencia) + '</Numero>')
+        if numero_documento_referencia:
+            sb.append('<Numero>' + str(numero_documento_referencia) + '</Numero>')
         sb.append('<FechaEmisionIR>' + fecha_emision_referencia + '</FechaEmisionIR>')
-        sb.append('<Codigo>' + str(codigo_referencia) + '</Codigo>')
-        sb.append('<Razon>' + str(razon_referencia) + '</Razon>')
+        if codigo_referencia:
+            sb.append('<Codigo>' + str(codigo_referencia) + '</Codigo>')
+        if razon_referencia:
+            sb.append('<Razon>' + escape(str(razon_referencia)[:180]) + '</Razon>')
         sb.append('</InformacionReferencia>')
 
     # Otros
@@ -1098,7 +1106,9 @@ def consulta_clave(clave, token, tipo_ambiente):
                          'respuesta-xml': response.json().get('respuesta-xml')}
     elif 400 <= response.status_code <= 499:
         _logger.error('FECR - 400 - consulta_clave failed.  error: %s reason: %s', response.status_code, response.reason)
-        response_json = {'status': 400, 'ind-estado': 'error'}
+        # Hacienda explica el motivo en esta cabecera, p. ej. "El comprobante [...] no ha sido recibido."
+        response_json = {'status': 400, 'ind-estado': 'error',
+                         'error-cause': response.headers.get('X-Error-Cause') or ''}
     else:
         _logger.error('FECR - consulta_clave failed.  error: %s', response.status_code)
         response_json = {'status': response.status_code, 'text': 'token_hacienda failed: %s' % response.reason}
@@ -1139,8 +1149,9 @@ def consulta_documentos(self, inv, env, token_m_h, date_cr, xml_firmado):
     last_state = inv.state_tributacion
     inv.state_tributacion = estado_m_h
     if inv.move_type in ['out_invoice', 'out_refund']:
-        last_state = inv.state_tributacion
-        inv.state_tributacion = estado_m_h
+        # Aqui se releia state_tributacion, ya actualizado, sobre last_state:
+        # el aviso al cliente exige que el estado anterior fuera 'procesando',
+        # asi que en ventas el correo automatico no salia nunca.
         if date_cr:
             inv.date_issuance = date_cr
         if xml_firmado:
@@ -1175,14 +1186,13 @@ def consulta_documentos(self, inv, env, token_m_h, date_cr, xml_firmado):
         else:
             email_template = self.env.ref('account.email_template_edi_invoice', False)
 
-        attachments = get_invoice_attachments(inv, inv.id)
-        if len(attachments) == 2:
-            email_template.attachment_ids = [(6, 0, attachments)]
+        # Los XML se adjuntan a este correo concreto, no a la plantilla, que es
+        # compartida y dejaba el XML de una factura puesto para la siguiente.
+        if len(inv._get_electronic_mail_attachments()) == 2:
             try:
-                email_template.with_context(type='binary', default_type='binary').send_mail(inv.id, raise_exception=False, force_send=True)
+                inv._send_electronic_invoice_email(email_template)
             except Exception:
                 _logger.error('FECR - consulta documento error al enviar correo: %s', inv.number_electronic)
-            email_template.attachment_ids = [(5, 0, 0)]
 
 
 def send_message(inv, date_cr, xml, token, env):

@@ -20,7 +20,12 @@ class AccountMoveReversal(models.TransientModel):
             return {**default_values}
         # R1705(no-else-return)
         tipo_doc = False
-        if move.tipo_documento in ('FE', 'TE') and move.state_tributacion == 'rechazado':
+        # La reversa de un documento sin comprobante electronico tampoco lo
+        # lleva: como NC gastaba un consecutivo y se enviaba a Hacienda
+        # referenciando un documento que Hacienda no conoce.
+        if move.tipo_documento == 'disabled':
+            tipo_doc = 'disabled'
+        elif move.tipo_documento in ('FE', 'TE') and move.state_tributacion == 'rechazado':
             tipo_doc = 'NC'
         elif move.move_type == 'out_refund':
             tipo_doc = 'ND'
