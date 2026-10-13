@@ -171,7 +171,23 @@ class AccountInvoiceElectronic(models.Model):
 
     reference_document_id = fields.Many2one("reference.document", string="Reference Document Type")
 
-    payment_methods_id = fields.Many2one("payment.methods", string="Payment methods", )
+    @api.model
+    def _default_payment_methods_id(self):
+        move_type = self.env.context.get('default_move_type')
+        if not move_type and len(self) == 1:
+            move_type = self.move_type
+        if move_type not in ('out_invoice', 'out_refund', 'in_invoice', 'in_refund'):
+            return False
+        return (
+            self.env.ref('cr_electronic_invoice.PaymentMethods_4', raise_if_not_found=False)
+            or self.env['payment.methods'].search([('sequence', '=', '01')], limit=1)
+        )
+
+    payment_methods_id = fields.Many2one(
+        "payment.methods",
+        string="Payment methods",
+        default=_default_payment_methods_id,
+    )
 
     invoice_id = fields.Many2one("account.move", string="Reference document", copy=False)
 
@@ -374,7 +390,7 @@ class AccountInvoiceElectronic(models.Model):
     def _onchange_partner_id(self, validate_payment=True):
         super()._onchange_partner_id()
         if (validate_payment):
-            self.payment_methods_id = self.partner_id.payment_methods_id
+            self.payment_methods_id = self.partner_id.payment_methods_id or self._default_payment_methods_id()
 
         if self.move_type in ('in_invoice', 'in_refund'):
             if self.partner_id:
@@ -1127,11 +1143,17 @@ class AccountInvoiceElectronic(models.Model):
         normal, sin pedir Clave ni enviar nada a Hacienda.
         """
         self.ensure_one()
-        reversal = self._reverse_moves(default_values_list=[{
+        default_values = {
             'date': fields.Date.context_today(self),
             'ref': _('Reversa interna por reintento de %s') % (self.name or self.sequence or self.number_electronic),
             'tipo_documento': 'disabled',
-        }], cancel=True)
+        }
+        if self.move_type == 'out_refund':
+            # Odoo 14 revierte una NC con un asiento, que los reportes de
+            # facturacion no ven: restaban la NC rechazada y la nueva. Como en
+            # 19, la reversa es una factura disabled.
+            default_values['move_type'] = 'out_invoice'
+        reversal = self._reverse_moves(default_values_list=[default_values], cancel=True)
         reversal.write({
             **reversal._get_fe_retry_clean_electronic_values(),
             'state_tributacion': 'na',
@@ -1370,6 +1392,8 @@ class AccountInvoiceElectronic(models.Model):
                               current_invoice, total_invoices, inv.number_electronic)
 
                 if not inv.xml_comprobante or (inv.tipo_documento == 'FEC' and inv.state_tributacion == 'rechazado'):
+                    inv._ensure_payment_method_for_electronic_invoice()
+
                     # En una FEC el Emisor del XML es el proveedor, y ese bloque
                     # exige datos que en un res.partner pueden faltar. Se avisa
                     # cual falta en vez de reventar armando el XML.
@@ -1678,23 +1702,13 @@ class AccountInvoiceElectronic(models.Model):
 
                                 line["impuesto"] = taxes
                                 line["impuestoNeto"] = 0 if _tax_from_factory else round(_line_tax, 5)
-                            elif inv.tipo_documento == 'FEE':
-                                _tax_exempt = True
-                                taxes[1] = {
-                                    'codigo': '01',
-                                    'tarifa': 0.0,
-                                    'monto': 0.0,
-                                    'iva_tax_desc': 'Tarifa 0%',
-                                    'iva_tax_code': '01',
-                                }
-                                line["impuesto"] = taxes
-                                line["impuestoNeto"] = 0.0
                             else:
                                 # El esquema 4.4 exige Impuesto e ImpuestoNeto en
                                 # toda linea de detalle. Una linea sin impuestos se
                                 # declara con CodigoTarifaIVA 10 (Tarifa Exenta):
                                 # el 01 es "Tarifa 0%" del art. 32 y Hacienda no lo
-                                # cuenta ni como gravado ni como exento.
+                                # cuenta ni como gravado ni como exento. En la FEE
+                                # el 01 ademas se rechaza (-101).
                                 _tax_exempt = True
                                 taxes[1] = {
                                     'codigo': '01',
@@ -2018,6 +2032,20 @@ class AccountInvoiceElectronic(models.Model):
             and company.signature
             and company.frm_pin
         )
+
+    def _ensure_payment_method_for_electronic_invoice(self):
+        for inv in self:
+            if inv.move_type not in ('out_invoice', 'out_refund', 'in_invoice', 'in_refund'):
+                continue
+            if inv.tipo_documento == 'disabled' or not inv._has_electronic_invoice_configuration():
+                continue
+            if inv.payment_methods_id:
+                continue
+            default_payment_method = inv._default_payment_methods_id()
+            if default_payment_method:
+                inv.payment_methods_id = default_payment_method
+            else:
+                raise UserError(_('Select the payment method for the electronic invoice.'))
 
     def _validate_electronic_invoice_issuer_before_post(self):
         """El emisor (nuestra compania) tiene los datos que Hacienda exige."""
@@ -2392,6 +2420,8 @@ class AccountInvoiceElectronic(models.Model):
                 inv._validate_tariff_head_before_post()
                 inv._validate_reference_before_post()
 
+            inv._ensure_payment_method_for_electronic_invoice()
+
             # self._onchange_partner_id(validate_payment=False)
 
             if inv.partner_id.has_exoneration:
@@ -2566,7 +2596,7 @@ class AccountInvoiceElectronic(models.Model):
             if move.move_type == 'out_invoice':
                 default_values.setdefault('tipo_documento', 'disabled' if move.tipo_documento == 'disabled' else 'NC')
             default_values.update({
-                'move_type': reverse_type_map[move.move_type],
+                'move_type': default_values.get('move_type') or reverse_type_map[move.move_type],
                 'reversed_entry_id': move.id,
             })
             move_vals_list.append(move.with_context(move_reverse_cancel=cancel)._reverse_move_vals(default_values,
