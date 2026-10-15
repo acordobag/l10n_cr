@@ -204,12 +204,26 @@ last_tokens_expire = {}
 last_tokens_refresh = {}
 
 
+def _token_key(inv):
+    """Llave del cache de tokens: (base de datos, compania).
+
+    Los diccionarios de arriba son GLOBALES DEL PROCESO de Odoo. Con una sola base, el id de la
+    compania bastaba; pero en un servidor que atiende varias bases todas tienen la compania id=1.
+    Con la llave anterior (solo el id), si otra base pedia un token a Hacienda, esta reutilizaba
+    ese token durante los ~5 minutos que dura y el envio salia autenticado como OTRO contribuyente:
+    Hacienda rechaza con -85 "El contribuyente que se autentica no coincide con el emisor del
+    documento electronico". Es intermitente: depende de si otra base envio justo antes.
+    """
+    return (inv.env.cr.dbname, inv.company_id.id)
+
+
 def get_token_hacienda(inv, tipo_ambiente):
     global last_tokens, last_tokens_time, last_tokens_expire, last_tokens_refresh
 
-    token = last_tokens.get(inv.company_id.id, False)
-    token_time = last_tokens_time.get(inv.company_id.id, False)
-    token_expire = last_tokens_expire.get(inv.company_id.id, 0)
+    key = _token_key(inv)
+    token = last_tokens.get(key, False)
+    token_time = last_tokens_time.get(key, False)
+    token_expire = last_tokens_expire.get(key, 0)
     current_time = time.time()
 
     if token and (current_time - token_time < token_expire - 10):
@@ -222,7 +236,10 @@ def get_token_hacienda(inv, tipo_ambiente):
                 'username': inv.company_id.frm_ws_identificador,
                 'password': inv.company_id.frm_ws_password}
 
-        _logger.info('test %s' % (data))
+        # Antes: _logger.info('test %s' % (data)), que escribia la CONTRASENA de la API de
+        # Hacienda en texto plano en el log del servidor en cada solicitud de token.
+        _logger.info('FECR - solicitando token a Hacienda: base=%s compania=%s usuario=%s'
+                     % (key[0], key[1], data['username']))
 
         # establecer el ambiente al cual me voy a conectar
         endpoint = fe_enums.UrlHaciendaToken[tipo_ambiente]
@@ -232,10 +249,10 @@ def get_token_hacienda(inv, tipo_ambiente):
             response_json = response.json()
             if 200 <= response.status_code <= 299:
                 token_hacienda = response_json.get('access_token')
-                last_tokens[inv.company_id.id] = token_hacienda  # fix: store actual token
-                last_tokens_time[inv.company_id.id] = time.time()
-                last_tokens_expire[inv.company_id.id] = response_json.get('expires_in')
-                last_tokens_refresh[inv.company_id.id] = response_json.get('refresh_expires_in')
+                last_tokens[key] = token_hacienda  # fix: store actual token
+                last_tokens_time[key] = time.time()
+                last_tokens_expire[key] = response_json.get('expires_in')
+                last_tokens_refresh[key] = response_json.get('refresh_expires_in')
             else:
                 _logger.error('FECR - token_hacienda failed.  error: %s' % (response.status_code))
         except requests.exceptions.RequestException as e:
