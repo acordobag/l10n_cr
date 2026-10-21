@@ -28,6 +28,28 @@ from decimal import Decimal, ROUND_HALF_UP
 from odoo import _
 from odoo.exceptions import UserError
 from xml.sax.saxutils import escape
+
+# Cuanto se espera a Hacienda antes de rendirse: (conectar, responder).
+#
+# POR QUE ESTO IMPORTA
+# requests sin timeout espera PARA SIEMPRE. Si Hacienda acepta la conexion y
+# despues no contesta, el worker de Odoo se queda colgado con su transaccion
+# de PostgreSQL abierta hasta que el vigilante de Odoo lo mata a los 120s
+# (limit_time_real). Con 3 workers compartidos entre mas de 10 bases, tres
+# usuarios esperando a Hacienda dejan el servidor entero sin responder.
+#
+# Paso el 20-oct-2026 a las 13:36:31: los tres workers murieron en el mismo
+# segundo y PostgreSQL registro tres "unexpected EOF on client connection
+# with an open transaction". No habia ni un ConnectionError en el log,
+# justamente porque no habia timeout que disparar.
+#
+# Las seis llamadas ya estaban dentro de un try/except RequestException, y
+# requests.exceptions.Timeout hereda de el: el camino del error no cambia,
+# lo unico que cambia es que ahora el error OCURRE en vez de colgarse.
+#
+# 5s para conectar: si Hacienda no acepta la conexion en 5 segundos, esta caida.
+# 30s para responder: firmar y recibir un comprobante tarda segundos, no minutos.
+TIEMPO_ESPERA_HACIENDA = (5, 30)
 from ..xades.context2 import XAdESContext2, PolicyId2, create_xades_epes_signature
 
 from lxml import etree
@@ -245,7 +267,8 @@ def get_token_hacienda(inv, tipo_ambiente):
         endpoint = fe_enums.UrlHaciendaToken[tipo_ambiente]
 
         try:
-            response = requests.request("POST", endpoint, data=data, headers=headers)
+            response = requests.request("POST", endpoint, data=data, headers=headers,
+                                        timeout=TIEMPO_ESPERA_HACIENDA)
             response_json = response.json()
             if 200 <= response.status_code <= 299:
                 token_hacienda = response_json.get('access_token')
@@ -271,10 +294,14 @@ def refresh_token_hacienda(tipo_ambiente, token):
     endpoint = fe_enums.UrlHaciendaToken[tipo_ambiente]
 
     try:
-        response = requests.request("POST", endpoint, data=data, headers=headers)
+        response = requests.request("POST", endpoint, data=data, headers=headers,
+                                    timeout=TIEMPO_ESPERA_HACIENDA)
         response_json = response.json()
         token_hacienda = response_json.get('access_token')
         return token_hacienda
+    except requests.exceptions.RequestException as e:
+        _logger.error('FECR - refresh_token_hacienda - sin respuesta de Hacienda: %s', e)
+        return False
     except ImportError:
         raise Warning(_('Error Refrescando el Token desde MH'))
 
@@ -958,7 +985,8 @@ def send_xml_fe(inv, token, date, xml, tipo_ambiente):
     json_hacienda = json.dumps(data)
 
     try:
-        response = requests.request("POST", endpoint, data=json_hacienda, headers=headers)
+        response = requests.request("POST", endpoint, data=json_hacienda, headers=headers,
+                                    timeout=TIEMPO_ESPERA_HACIENDA)
         if response.status_code != 202:
             error_caused_by = response.headers.get('X-Error-Cause') if 'X-Error-Cause' in response.headers else ''
             error_caused_by += response.headers.get('validation-exception', '')
@@ -966,6 +994,14 @@ def send_xml_fe(inv, token, date, xml, tipo_ambiente):
             return {'status': response.status_code, 'text': error_caused_by}
         else:
             return {'status': response.status_code, 'text': response.reason}
+    except requests.exceptions.RequestException as e:
+        # Hacienda no contesto (caida, lentitud o el timeout de arriba). NO se
+        # levanta excepcion: el llamador trata cualquier status fuera de
+        # 200-299 como "no se envio", suma error_count y el cron lo reintenta
+        # despues. Levantar aqui abortaria la confirmacion de la factura por
+        # un problema de red ajeno.
+        _logger.error('FECR - send_xml_fe - sin respuesta de Hacienda: %s', e)
+        return {'status': -1, 'text': 'Excepcion %s' % e}
     except ImportError:
         raise Warning(_('Error enviando el XML al Ministerior de Hacienda'))
 
@@ -1112,7 +1148,8 @@ def consulta_clave(clave, token, tipo_ambiente):
     _logger.debug('FECR - consulta_clave - url: %s', endpoint)
 
     try:
-        response = requests.get(endpoint, headers=headers)
+        response = requests.get(endpoint, headers=headers,
+                                timeout=TIEMPO_ESPERA_HACIENDA)
     except requests.exceptions.RequestException as e:
         _logger.error('Exception %s', e)
         return {'status': -1, 'text': 'Excepcion %s' % e}
@@ -1139,7 +1176,8 @@ def get_economic_activities(company):
                'Content-Type': 'application/x-www-form-urlencoded'}
 
     try:
-        response = requests.get(endpoint, headers=headers, verify=False)
+        response = requests.get(endpoint, headers=headers, verify=False,
+                                timeout=TIEMPO_ESPERA_HACIENDA)
     except requests.exceptions.RequestException as e:
         _logger.error('Exception %s', e)
         return {'status': -1, 'text': 'Excepcion %s' % e}
@@ -1230,7 +1268,8 @@ def send_message(inv, date_cr, xml, token, env):
 
     headers = {'Content-Type': 'application/json', 'Authorization': 'Bearer {}'.format(token)}
     try:
-        response = requests.post(endpoint, data=json.dumps(comprobante), headers=headers)
+        response = requests.post(endpoint, data=json.dumps(comprobante), headers=headers,
+                                 timeout=TIEMPO_ESPERA_HACIENDA)
     except requests.exceptions.RequestException as e:
         _logger.info('Exception %s', e)
         return {'status': 400, 'text': 'Excepción de envio XML'}
