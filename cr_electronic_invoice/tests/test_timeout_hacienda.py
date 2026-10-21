@@ -195,3 +195,43 @@ class TestTimeoutHacienda(common.TransactionCase):
             sueltas,
             'Hay llamadas a Hacienda fuera de un try/except: un timeout ahi '
             'le saldria al usuario como error 500.\n  ' + '\n  '.join(sueltas))
+
+
+class TestIntervalosDeCron(common.TransactionCase):
+    """Cada cuanto se habla con Hacienda.
+
+    Acordado con el cliente el 21-oct-2026, despues de la caida del 20:
+    enviar seguido (que el comprobante salga rapido) y consultar espaciado
+    (el estado puede esperar). Cada consulta es una llamada a internet, y
+    cada llamada es un worker ocupado: con 3 workers compartidos entre mas
+    de diez bases, consultar cada 5 minutos en todas es carga que no paga.
+
+    Estos valores viven en data/ir_cron_data.xml, que NO lleva noupdate:
+    actualizar el modulo los vuelve a aplicar en todas las bases. Esta
+    prueba es el candado para que no se cambien por descuido.
+    """
+
+    ESPERADO = {
+        'ir_cron_FECR_Envia':    (5,  'minutes'),
+        'ir_cron_FECR_Consulta': (15, 'minutes'),
+    }
+
+    def test_los_intervalos_son_los_acordados(self):
+        for xmlid, (numero, tipo) in self.ESPERADO.items():
+            cron = self.env.ref('cr_electronic_invoice.%s' % xmlid,
+                                raise_if_not_found=False)
+            self.assertTrue(cron, 'no existe el cron %s' % xmlid)
+            self.assertEqual(
+                (cron.interval_number, cron.interval_type), (numero, tipo),
+                '%s deberia correr cada %s %s y corre cada %s %s'
+                % (xmlid, numero, tipo, cron.interval_number, cron.interval_type))
+
+    def test_se_envia_mas_seguido_de_lo_que_se_consulta(self):
+        """La regla de fondo, por si manana se tocan los numeros."""
+        envia = self.env.ref('cr_electronic_invoice.ir_cron_FECR_Envia')
+        consulta = self.env.ref('cr_electronic_invoice.ir_cron_FECR_Consulta')
+        self.assertEqual(envia.interval_type, consulta.interval_type)
+        self.assertLess(
+            envia.interval_number, consulta.interval_number,
+            'enviar tiene que ser mas frecuente que consultar: el comprobante '
+            'debe salir rapido, el estado puede esperar')

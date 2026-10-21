@@ -16,7 +16,7 @@
         <field name="model_id" ref="model_account_move" />
         <field name="state">code</field>
         <field name="code">model._send_invoices_to_hacienda()</field>
-        <field name="interval_number">10</field>
+        <field name="interval_number">5</field>
         <field name="interval_type">minutes</field>
         <field name="numbercall">-1</field>
         <field name="doall" eval="False" />
@@ -27,7 +27,7 @@
         <field name="model_id" ref="model_account_move" />
         <field name="state">code</field>
         <field name="code">model._check_hacienda_for_invoices()</field>
-        <field name="interval_number">5</field>
+        <field name="interval_number">15</field>
         <field name="interval_type">minutes</field>
         <field name="numbercall">-1</field>
         <field name="doall" eval="False" />
