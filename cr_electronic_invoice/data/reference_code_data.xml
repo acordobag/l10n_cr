@@ -87,6 +87,45 @@
         <field name="active">true</field>
     </record>
 
+    <!--
+      Codigos 13 a 16: Anexos y Estructuras v4.4 actualizados (comunicado del
+      22-abr-2026, obligatorios desde el 1-nov-2026). Separan el ERROR MATERIAL
+      -el documento salio mal- del hecho posterior -una devolucion real-, que
+      siguen usando los codigos 01, 02 y 06.
+
+      El 17 (Pago a comprobante electronico) NO se agrega: el esquema solo lo
+      acepta en el Recibo Electronico de Pago, que este modulo todavia no
+      emite. Ofrecerlo seria ofrecer un codigo que la validacion rechaza.
+    -->
+
+    <!-- 13 -->
+    <record id="cr_electronic_invoice.ReferenceCode_13" model="reference.code">
+        <field name="code">13</field>
+        <field name="name">Anula documento de referencia por error material</field>
+        <field name="active">true</field>
+    </record>
+
+    <!-- 14 -->
+    <record id="cr_electronic_invoice.ReferenceCode_14" model="reference.code">
+        <field name="code">14</field>
+        <field name="name">Corrige monto por error material</field>
+        <field name="active">true</field>
+    </record>
+
+    <!-- 15 -->
+    <record id="cr_electronic_invoice.ReferenceCode_15" model="reference.code">
+        <field name="code">15</field>
+        <field name="name">Sustituye comprobante electrónico por error material</field>
+        <field name="active">true</field>
+    </record>
+
+    <!-- 16 -->
+    <record id="cr_electronic_invoice.ReferenceCode_16" model="reference.code">
+        <field name="code">16</field>
+        <field name="name">Sustituye comprobante electrónico rechazado</field>
+        <field name="active">true</field>
+    </record>
+
     <!-- 99 -->
     <record id="cr_electronic_invoice.ReferenceCode_99" model="reference.code">
         <field name="code">99</field>

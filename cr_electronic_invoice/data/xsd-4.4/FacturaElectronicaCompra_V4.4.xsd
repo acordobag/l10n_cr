@@ -1435,7 +1435,7 @@ Además, cuando se seleccione el código 04, 08, 09 y 10 de la nota 16 en “Tip
 			<xs:documentation>Tipo de dato String que solo permite el uso de números con un largo de 50.</xs:documentation>
 		</xs:annotation>
 		<xs:restriction base="xs:string">
-			<xs:pattern value="\d{50,50}"/>
+			<xs:pattern value="[a-zA-Z0-9]{50,50}"/>
 		</xs:restriction>
 	</xs:simpleType>
 	<xs:simpleType name="NumeroConsecutivoType">
@@ -2358,7 +2358,7 @@ Además, cuando se seleccione el código 04, 08, 09 y 10 de la nota 16 en “Tip
 			</xs:enumeration>
 			<xs:enumeration value="03">
 				<xs:annotation>
-					<xs:documentation>nota de crédito electrónica</xs:documentation>
+					<xs:documentation>Nota de crédito electrónica</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="04">
@@ -2441,6 +2441,16 @@ Además, cuando se seleccione el código 04, 08, 09 y 10 de la nota 16 en “Tip
 					<xs:documentation>Nota de Débito a Factura Electrónica de Compra</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
+			<xs:enumeration value="19">
+				<xs:annotation>
+					<xs:documentation>Factura Electrónica de Exportación</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="20">
+				<xs:annotation>
+					<xs:documentation>Recibo Electrónico de Pago</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
 		</xs:restriction>
 	</xs:simpleType>
 	<xs:simpleType name="CodigoReferenciaType">
@@ -2500,6 +2510,26 @@ Además, cuando se seleccione el código 04, 08, 09 y 10 de la nota 16 en “Tip
 			<xs:enumeration value="12">
 				<xs:annotation>
 					<xs:documentation>Crédito por exoneración posterior a la facturación</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="13">
+				<xs:annotation>
+					<xs:documentation>Anula documento de referencia por error material</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="14">
+				<xs:annotation>
+					<xs:documentation>Corrige monto por error material</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="15">
+				<xs:annotation>
+					<xs:documentation>Sustituye comprobante electrónico por error material</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="16">
+				<xs:annotation>
+					<xs:documentation>Sustituye comprobante electrónico rechazado</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="99">

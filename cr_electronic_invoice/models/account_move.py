@@ -1167,7 +1167,11 @@ class AccountInvoiceElectronic(models.Model):
     # Anexos y Estructuras v4.4, nota 10: el comprobante que sustituye a uno
     # rechazado por Hacienda lo referencia con el tipo 10.
     FE_RETRY_REFERENCE_DOCUMENT_CODE = '10'
-    FE_RETRY_REFERENCE_CODE = '04'
+    # Nota 9: hasta los Anexos actualizados (obligatorios desde el 1-nov-2026)
+    # no habia un codigo para esto y se usaba el 04, "Referencia a otro
+    # documento", que decia la verdad pero no decia nada. El 16 dice
+    # exactamente lo que paso: este comprobante sustituye a uno rechazado.
+    FE_RETRY_REFERENCE_CODE = '16'
 
     def _get_fe_retry_hacienda_state(self):
         """Estado real en Hacienda antes de reintentar: 'rechazado' o 'no_recibido'.
@@ -2315,6 +2319,64 @@ class AccountInvoiceElectronic(models.Model):
                     '(tiene "%(clave)s").'
                 ) % {'doc': inv.display_name, 'clave': inv.not_loaded_invoice})
 
+    # Anexos y Estructuras v4.4, nota 9 (actualizada, obligatoria desde el
+    # 1-nov-2026): con estos dos codigos la nota corrige un ERROR MATERIAL del
+    # comprobante original, y su efecto se reconoce en el periodo de ESE
+    # comprobante, no en el mes en que se emite la nota.
+    MATERIAL_ERROR_REFERENCE_CODES = ('13', '14')
+
+    def _align_accounting_date_with_reference(self):
+        """Lleva la nota al periodo del comprobante que corrige.
+
+        POR QUE
+        Una nota con codigo 13 o 14 no es un hecho nuevo: dice que el documento
+        original salio mal. El IVA que ajusta es el de aquel mes. Si se deja la
+        fecha de hoy, una nota de noviembre que corrige una factura de agosto
+        mueve el impuesto de agosto a noviembre y las dos declaraciones quedan
+        mal: la de agosto de mas y la de noviembre de menos.
+
+        Los codigos 01, 02, 06 y 12 siguen cayendo en el mes de emision, porque
+        esos si responden a un hecho posterior -una devolucion, una exoneracion-
+        que ocurrio cuando ocurrio.
+
+        QUE SE MUEVE Y QUE NO
+        Solo la fecha contable (date), que es la que decide el periodo. La
+        fecha de emision (invoice_date) no se toca: es la fecha real en que se
+        emite el comprobante y es la que viaja a Hacienda en FechaEmision.
+        """
+        for inv in self:
+            if inv.reference_code_id.code not in inv.MATERIAL_ERROR_REFERENCE_CODES:
+                continue
+            original = inv.invoice_id
+            if not original or not original.date or inv.date == original.date:
+                continue
+            bloqueos = [f for f in (inv.company_id.period_lock_date,
+                                    inv.company_id.fiscalyear_lock_date,
+                                    inv.company_id.tax_lock_date) if f]
+            if bloqueos and original.date <= max(bloqueos):
+                # No se mueve la fecha a escondidas ni se deja en el mes
+                # equivocado: se dice cual es el problema, porque la salida
+                # -reabrir el periodo o usar otro codigo- la decide el contador.
+                raise UserError(_(
+                    'No se puede confirmar %(doc)s con el codigo de referencia %(codigo)s: '
+                    'ese codigo exige que el ajuste caiga en el periodo de %(origen)s '
+                    '(%(fecha)s), y ese periodo esta cerrado hasta el %(cierre)s. '
+                    'Reabra el periodo o use un codigo de los que se reconocen en el mes '
+                    'de emision (01 Anula, 02 Corrige texto, 06 Devolucion de mercancia).'
+                ) % {'doc': inv.display_name,
+                     'codigo': inv.reference_code_id.code,
+                     'origen': original.display_name,
+                     'fecha': original.date,
+                     'cierre': max(bloqueos)})
+            inv.date = original.date
+            inv.message_post(body=_(
+                'Fecha contable movida al %(fecha)s, el periodo de %(origen)s, porque el '
+                'codigo de referencia %(codigo)s corrige un error material de ese '
+                'comprobante. La fecha de emision no cambia.'
+            ) % {'fecha': original.date,
+                 'origen': original.display_name,
+                 'codigo': inv.reference_code_id.code})
+
     def _requires_tariff_head(self):
         """FEE y las NC/ND que la modifican llevan partida arancelaria."""
         self.ensure_one()
@@ -2419,6 +2481,9 @@ class AccountInvoiceElectronic(models.Model):
                         inv._validate_fec_before_post()
                 inv._validate_tariff_head_before_post()
                 inv._validate_reference_before_post()
+                # Antes de confirmar, porque el periodo del asiento y su
+                # numeracion se fijan al confirmar.
+                inv._align_accounting_date_with_reference()
 
             inv._ensure_payment_method_for_electronic_invoice()
 

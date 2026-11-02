@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<xs:schema xmlns="https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:vc="http://www.w3.org/2007/XMLSchema-versioning" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" targetNamespace="https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor" elementFormDefault="qualified" attributeFormDefault="unqualified" version="4.3" vc:minVersion="1.1">
-	<xs:import namespace="http://www.w3.org/2000/09/xmldsig#" schemaLocation="http://www.w3.org/TR/2008/REC-xmldsig-core-20080610/xmldsig-core-schema.xsd"/>
+<xs:schema xmlns="https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:vc="http://www.w3.org/2007/XMLSchema-versioning" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" targetNamespace="https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor" elementFormDefault="qualified" attributeFormDefault="unqualified" version="4.4" vc:minVersion="1.1">
+	<xs:import namespace="http://www.w3.org/2000/09/xmldsig#" schemaLocation="../../xmldsig-core-schema.xsd"/>
 	<xs:element name="MensajeReceptor">
 		<xs:annotation>
 			<xs:documentation>Mensaje de aceptacion o rechazo de los documentos electronicos por parte del obligado tributario</xs:documentation>
@@ -13,18 +13,17 @@
 					</xs:annotation>
 					<xs:simpleType>
 						<xs:restriction base="xs:string">
-							<xs:pattern value="\d{50,50}"/>
+							<xs:pattern value="[a-zA-Z0-9]{50,50}"/>
 						</xs:restriction>
 					</xs:simpleType>
 				</xs:element>
 				<xs:element name="NumeroCedulaEmisor">
 					<xs:annotation>
-						<xs:documentation>Número de cédula fisica/jurídica/NITE/DIMEX del vendedor</xs:documentation>
+						<xs:documentation>Número de cédula fisica/jurídica/NITE/DIMEX/Extranjero No Domiciliado/No Contribuyente del vendedor</xs:documentation>
 					</xs:annotation>
 					<xs:simpleType>
 						<xs:restriction base="xs:string">
-							<xs:maxLength value="12"/>
-							<xs:pattern value="\d{9,12}"/>
+							<xs:maxLength value="20"/>
 						</xs:restriction>
 					</xs:simpleType>
 				</xs:element>
@@ -125,11 +124,11 @@
 				</xs:element>
 				<xs:element name="NumeroCedulaReceptor">
 					<xs:annotation>
-						<xs:documentation>Número de cédula fisica/jurídica/NITE/DIMEX del comprador</xs:documentation>
+						<xs:documentation>Número de cédula fisica/jurídica/NITE/DIMEX/Extranjero No Domiciliado/No Contribuyente del comprador</xs:documentation>
 					</xs:annotation>
 					<xs:simpleType>
 						<xs:restriction base="xs:string">
-							<xs:maxLength value="12"/>
+							<xs:maxLength value="20"/>
 							<xs:pattern value="\d{9,12}"/>
 						</xs:restriction>
 					</xs:simpleType>
@@ -145,7 +144,7 @@
 						</xs:restriction>
 					</xs:simpleType>
 				</xs:element>
-				<xs:element ref="ds:Signature" minOccurs="1" maxOccurs="1"/>
+				<xs:element ref="ds:Signature" minOccurs="1" maxOccurs="5"/>
 			</xs:sequence>
 		</xs:complexType>
 	</xs:element>
