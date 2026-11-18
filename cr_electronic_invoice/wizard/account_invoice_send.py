@@ -11,9 +11,17 @@ class AccountInvoiceSend(models.TransientModel):
     def _add_electronic_xml_attachments(self):
         for wizard in self:
             if wizard.composer_id and wizard.composition_mode == 'comment' and len(wizard.invoice_ids) == 1:
-                attachments = wizard.invoice_ids._get_electronic_mail_attachments()
-                if attachments:
-                    wizard.composer_id.attachment_ids = [(4, attachment.id) for attachment in attachments]
+                invoice = wizard.invoice_ids
+                composer = wizard.composer_id
+                own = invoice._get_electronic_mail_attachments()
+                # Fuera cualquier XML que no sea de esta factura (p. ej. heredado
+                # de la plantilla compartida); se conservan los demas adjuntos.
+                foreign = composer.attachment_ids.filtered(
+                    lambda a: (a.res_model == 'account.move' or (a.name or '').lower().endswith('.xml'))
+                    and a not in own)
+                commands = [(3, a.id) for a in foreign] + [(4, a.id) for a in own]
+                if commands:
+                    composer.attachment_ids = commands
 
     @api.onchange('template_id')
     def onchange_template_id(self):
@@ -31,6 +39,9 @@ class AccountInvoiceSend(models.TransientModel):
 
     def send_and_print_action(self):
         self.ensure_one()
+        if self.template_id:
+            for move in self.invoice_ids:
+                move._purge_template_xml_attachments(self.template_id)
         if self.composition_mode == 'mass_mail' and self.template_id:
             for move in self.invoice_ids:
                 if move.company_id.frm_ws_ambiente == 'disabled':

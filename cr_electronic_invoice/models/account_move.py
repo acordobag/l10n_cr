@@ -445,14 +445,43 @@ class AccountInvoiceElectronic(models.Model):
                 continue
             # Un reenvio, una FEC rechazada o una respuesta guardada dos veces
             # dejan varios adjuntos en el mismo campo, alguno vacio. Se manda el
-            # que lleva el nombre del comprobante actual y tiene contenido.
+            # que lleva el nombre del comprobante actual y tiene contenido, y
+            # ademas el XML debe contener la clave de ESTA factura: si no, es
+            # de otro comprobante y no se envia.
+            with_content = candidates.filtered(lambda a: a.file_size)
             current = (
-                candidates.filtered(lambda a: a.name == fname and a.file_size)
-                or candidates.filtered(lambda a: a.file_size)
-                or candidates
+                with_content.filtered(lambda a: a.name == fname and self._xml_attachment_matches_clave(a))
+                or with_content.filtered(self._xml_attachment_matches_clave)
             )[:1]
             attachment_ids += current.ids
         return Attachment.browse(attachment_ids)
+
+    def _xml_attachment_matches_clave(self, attachment):
+        """True si el XML adjunto pertenece a esta factura (contiene su clave)."""
+        self.ensure_one()
+        clave = (self.number_electronic or '').strip()
+        if not clave:
+            return False
+        try:
+            content = base64.b64decode(attachment.sudo().datas or b'')
+        except Exception:
+            return False
+        return clave.encode() in content
+
+    def _purge_template_xml_attachments(self, email_template):
+        """Quita de la plantilla los XML de facturas que dejo el codigo anterior.
+
+        La plantilla es compartida: un XML de otra factura guardado ahi sale en
+        todos los correos.
+        """
+        if not email_template:
+            return
+        stale = email_template.sudo().attachment_ids.filtered(
+            lambda a: a.res_model == 'account.move' or (a.name or '').lower().endswith('.xml'))
+        if stale:
+            _logger.warning('FECR - se quitan de la plantilla %s adjuntos XML ajenos: %s',
+                            email_template.name, stale.mapped('name'))
+            email_template.sudo().write({'attachment_ids': [(3, a.id) for a in stale]})
 
     def _send_electronic_invoice_email(self, email_template):
         """Manda el comprobante al cliente y deja constancia en la factura.
@@ -461,6 +490,7 @@ class AccountInvoiceElectronic(models.Model):
         su mensaje, asi que sin esta nota no quedaria rastro del envio.
         """
         self.ensure_one()
+        self._purge_template_xml_attachments(email_template)
         attachments = self._get_electronic_mail_attachments()
         email_template.with_context(type='binary', default_type='binary').send_mail(
             self.id,
