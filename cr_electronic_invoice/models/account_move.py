@@ -2520,7 +2520,7 @@ class AccountInvoiceElectronic(models.Model):
             # self._onchange_partner_id(validate_payment=False)
 
             if inv.partner_id.has_exoneration:
-                if inv.partner_id.date_expiration and (inv.partner_id.date_expiration > datetime.date.today()):
+                if inv.partner_id.date_expiration and (inv.partner_id.date_expiration < datetime.date.today()):
                     raise UserError(_('The exoneration of this client has expired'))
 
             currency = inv.currency_id
