@@ -806,14 +806,19 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
 
                     # Exoneración (si corresponde)
                     if inv.tipo_documento != 'FEE' and b.get('exoneracion'):
+                        _cod_inst, _otros_inst = _institucion_exoneracion_44(receiver_company.institution_name)
                         sb.append('<Exoneracion>')
-                        sb.append('<TipoDocumento>' + receiver_company.type_exoneration.code + '</TipoDocumento>')
+                        sb.append('<TipoDocumentoEX1>' + receiver_company.type_exoneration.code + '</TipoDocumentoEX1>')
+                        if receiver_company.type_exoneration.code == '99':
+                            sb.append('<TipoDocumentoOTRO>' + escape((receiver_company.type_exoneration.name or 'Otros')[:100].ljust(5)) + '</TipoDocumentoOTRO>')
                         sb.append('<NumeroDocumento>' + receiver_company.exoneration_number + '</NumeroDocumento>')
-                        sb.append('<NombreInstitucion>' + receiver_company.institution_name + '</NombreInstitucion>')
+                        sb.append('<NombreInstitucion>' + _cod_inst + '</NombreInstitucion>')
+                        if _otros_inst:
+                            sb.append('<NombreInstitucionOtros>' + escape(_otros_inst) + '</NombreInstitucionOtros>')
                         sb.append(
-                            '<FechaEmision>' + str(receiver_company.date_issue) + 'T00:00:00-06:00</FechaEmision>')
-                        sb.append('<PorcentajeExoneracion>' + _fmt(
-                            b['exoneracion']['porcentajeCompra']) + '</PorcentajeExoneracion>')
+                            '<FechaEmisionEX>' + str(receiver_company.date_issue) + 'T00:00:00-06:00</FechaEmisionEX>')
+                        sb.append('<TarifaExonerada>' + _fmt(
+                            b['exoneracion']['porcentajeCompra']) + '</TarifaExonerada>')
                         sb.append(
                             '<MontoExoneracion>' + _fmt(b['exoneracion']['montoImpuesto']) + '</MontoExoneracion>')
                         sb.append('</Exoneracion>')
@@ -944,6 +949,43 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
 
     sb.append('</' + fe_enums.tagName[inv.tipo_documento] + '>')
     return sb
+
+
+# v4.4: <NombreInstitucion> es un codigo (01-12 o 99), no texto libre. El campo
+# partner.institution_name guarda el texto que devuelve la API de exoneraciones
+# de Hacienda, asi que se traduce al codigo del XSD.
+_INSTITUCIONES_EXO_44 = (
+    ('01', ('ministerio de hacienda',)),
+    ('02', ('ministerio de relaciones exteriores',)),
+    ('03', ('ministerio de agricultura',)),
+    ('04', ('ministerio de economia',)),
+    ('05', ('cruz roja',)),
+    ('06', ('bomberos',)),
+    ('07', ('obras del espiritu santo',)),
+    ('08', ('fecrunapa', 'proteccion al anciano')),
+    ('09', ('earth', 'escuela de agricultura de la region humeda')),
+    ('10', ('incae', 'centroamericano de administracion de empresas')),
+    ('11', ('junta de proteccion social', 'jps')),
+    ('12', ('aresep', 'autoridad reguladora de los servicios publicos')),
+)
+
+
+def _institucion_exoneracion_44(valor):
+    """Devuelve (codigo, otros) para NombreInstitucion / NombreInstitucionOtros."""
+    import unicodedata
+    texto = (valor or '').strip()
+    if re.fullmatch(r'\d{2}', texto) and (texto == '99' or '01' <= texto <= '12'):
+        return texto, (None if texto != '99' else 'Otra institucion')
+    norm = unicodedata.normalize('NFKD', texto.lower())
+    norm = re.sub(r'[^a-z0-9 ]+', ' ', ''.join(c for c in norm if not unicodedata.combining(c)))
+    norm = re.sub(r'\s+', ' ', norm).strip()
+    for codigo, alias in _INSTITUCIONES_EXO_44:
+        if any(a in norm for a in alias):
+            return codigo, None
+    otros = texto[:160]
+    if len(otros) < 5:
+        otros = 'Otra institucion'
+    return '99', otros
 
 
 def _fmt(x):
