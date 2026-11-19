@@ -832,7 +832,13 @@ def gen_xml_v44(inv, sale_conditions, total_servicio_gravado,
                         code_key = str(b.get('codigo_impuesto_otro') or '')
                     k = (codigo, code_key)
                     if valor_asumido is None:
-                        desglose_impuesto[k] = float(desglose_impuesto.get(k, 0.0)) + float(b.get('monto') or 0.0)
+                        # El desglose es de lo COBRADO: se descuenta la parte
+                        # exonerada. Con el bruto, una exoneracion total deja
+                        # lineas con ImpuestoNeto 0 y un desglose mayor a cero,
+                        # y Hacienda rechaza con -487.
+                        monto_neto = float(b.get('monto') or 0.0) - float(
+                            (b.get('exoneracion') or {}).get('montoImpuesto') or 0.0)
+                        desglose_impuesto[k] = float(desglose_impuesto.get(k, 0.0)) + monto_neto
 
             # ImpuestoAsumidoEmisorFabrica no existe en los esquemas de FEC ni FEE
             # (verificado en el XSD real de Hacienda, igual que v19). ImpuestoNeto
