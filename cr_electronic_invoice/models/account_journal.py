@@ -39,7 +39,12 @@ class AccountJournalInherit(models.Model):
         try:
             invoice_xml = etree.fromstring(base64.b64decode(attachment.datas))
             document_names = "FacturaElectronica|NotaCreditoElectronica|NotaDebitoElectronica|TiqueteElectronico"
-            document_type = re.search(document_names, invoice_xml.tag).group(0)
+            match = re.search(document_names, invoice_xml.tag)
+            if not match:
+                # p.ej. MensajeHacienda o MensajeReceptor que vienen junto al comprobante
+                raise UserError(_("%s no es un comprobante electronico (raiz: %s)")
+                                % (attachment.name, etree.QName(invoice_xml).localname))
+            document_type = match.group(0)
             if document_type == 'TiqueteElectronico':
                 _logger.exception('This is a TICKET only invoices are valid for taxes')
                 # return False
@@ -49,6 +54,8 @@ class AccountJournalInherit(models.Model):
             inv_xmlns = namespaces.pop(None)
             namespaces['inv'] = inv_xmlns
             number_electronic = invoice_xml.xpath("inv:Clave", namespaces=namespaces)[0].text
+        except UserError:
+            raise
         except Exception as e:
             _logger.exception('FECR: ERROR Importing invoice %s', e)
             # return False
@@ -107,17 +114,27 @@ class AccountJournalInherit(models.Model):
         attachments = self.env['ir.attachment'].browse(attachment_ids)
         if not attachments:
             raise UserError(_("No attachment was provided"))
+        # El boton "Subir" de la lista llama con self vacio: el diario solo
+        # viene en el contexto cuando se entra desde el tablero.
+        journal = self[:1]
+        if not journal and self.env.context.get('default_journal_id'):
+            journal = self.browse(self.env.context['default_journal_id'])
+        if not journal:
+            journal = self.search([('type', '=', 'purchase'),
+                                   ('company_id', '=', self.env.company.id)], limit=1)
         invoices = self.env['account.move']
+        errors = []
         index = 0
         for attachment in attachments:
 
             if ".xml" in attachment.name or ".XML" in attachment.name:
                 try:
-                    invoice = self.invoice_from_xml(attachment)
+                    invoice = journal.invoice_from_xml(attachment)
                 except Exception as e:
                     _logger.exception('FECR: ERROR Importing invoice %s', e)
                     if len(attachments) == 1:
                         raise UserError(_("Error: %s") % e)
+                    errors.append("%s: %s" % (attachment.name, getattr(e, 'name', e)))
                     invoice = False
                 if invoice:
                     invoices += invoice
@@ -144,7 +161,7 @@ class AccountJournalInherit(models.Model):
         }
 
         if len(invoices) == 0:
-            raise UserError("There was no invoice to process.")
+            raise UserError(_("There was no invoice to process.") + "\n\n" + "\n".join(errors))
 
         if len(invoices) == 1:
             action_vals.update({'res_id': invoices[0].id, 'view_mode': 'form'})
